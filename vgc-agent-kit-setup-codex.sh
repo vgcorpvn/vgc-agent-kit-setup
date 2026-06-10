@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Khi chạy qua curl | bash, stdin bị pipe chiếm.
-# exec </dev/tty phải là dòng ĐẦU TIÊN — trước set -euo pipefail nếu có thể,
-# hoặc ngay sau shebang — để redirect stdin về terminal trước khi làm bất cứ thứ gì.
-# KHÔNG redirect stdout (>/dev/tty) vì sẽ conflict với pipe output.
-exec </dev/tty
-
 VGC_DIR="$HOME/.vgc-agent-kit"
 SKILLS_DIR="$HOME/.agents/skills"
 
