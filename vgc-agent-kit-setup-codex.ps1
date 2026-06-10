@@ -4,6 +4,9 @@ $VGC_DIR = "$env:USERPROFILE\.vgc-agent-kit"
 $SKILLS_DIR = "$env:USERPROFILE\.agents\skills"
 $WORKSPACE_DIR = "$env:USERPROFILE\.vgc-agent-workspace"
 
+# Never prompt for credentials
+$env:GIT_TERMINAL_PROMPT = "0"
+
 Write-Host "======================================"
 Write-Host "  VGC Agent Kit - Setup (Codex CLI)"
 Write-Host "======================================"
@@ -23,18 +26,13 @@ try {
     exit 1
 }
 
-# Step 2: Check existing installation — reuse if already cloned (e.g. by Claude setup)
+# Step 2: Check existing installation — reuse if already cloned
 $SKIP_CLONE = $false
 if (Test-Path $VGC_DIR) {
     if (Test-Path "$VGC_DIR\.git") {
         Write-Host "[vgc-agent-kit] Repo da ton tai tai $VGC_DIR — dung lai (skip clone)."
-        # Sanitize: strip any token from remote URL (fix from earlier installs)
-        $currentUrl = & git -C $VGC_DIR remote get-url origin 2>$null
-        if ($currentUrl -match "@github\.com" -and $currentUrl -notmatch "^git@") {
-            & git -C $VGC_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
-            Write-Host "[vgc-agent-kit] Da xoa token khoi remote URL."
-        }
         & git -C $VGC_DIR pull --ff-only 2>$null
+        if ($LASTEXITCODE -ne 0) { Write-Host "[vgc-agent-kit] Pull skipped (offline hoac token het han)." }
         $SKIP_CLONE = $true
     } else {
         Write-Host "[vgc-agent-kit] Thu muc $VGC_DIR ton tai nhung khong phai git repo."
@@ -64,22 +62,15 @@ if (-not $SKIP_CLONE) {
         exit 1
     }
 
-    # Step 4: Clone repo
-    $REPO_URL = "https://${TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-kit.git"
+    # Step 4: Clone repo (token in URL)
     Write-Host "[vgc-agent-kit] Dang clone repository..."
-    & git clone --quiet $REPO_URL $VGC_DIR 2>$null
+    & git clone --quiet "https://${TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-kit.git" $VGC_DIR 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[vgc-agent-kit] ERROR: Clone that bai. Kiem tra lai token va quyen truy cap repo."
         exit 1
     }
 
     Write-Host "[vgc-agent-kit] Clone thanh cong."
-
-    # Step 5: Strip token from remote URL + store credentials for future pulls
-    & git -C $VGC_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
-    & git -C $VGC_DIR config credential.helper store
-    $credentialInput = "protocol=https`nhost=github.com`nusername=${TOKEN_PLAIN}`npassword=${TOKEN_PLAIN}`n"
-    $credentialInput | & git -C $VGC_DIR credential approve 2>$null
 }
 
 # Step 5b: Check/install gh CLI
@@ -109,13 +100,8 @@ $SKIP_WORKSPACE = $false
 if (Test-Path $WORKSPACE_DIR) {
     if (Test-Path "$WORKSPACE_DIR\.git") {
         Write-Host "[vgc-agent-kit] Workspace repo da ton tai — dung lai."
-        # Sanitize: strip any token from remote URL
-        $wsUrl = & git -C $WORKSPACE_DIR remote get-url origin 2>$null
-        if ($wsUrl -match "@github\.com" -and $wsUrl -notmatch "^git@") {
-            & git -C $WORKSPACE_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
-            Write-Host "[vgc-agent-kit] Da xoa token khoi workspace remote URL."
-        }
         & git -C $WORKSPACE_DIR pull --ff-only 2>$null
+        if ($LASTEXITCODE -ne 0) { Write-Host "[vgc-agent-kit] Workspace pull skipped." }
         $SKIP_WORKSPACE = $true
     } else {
         Write-Host "[vgc-agent-kit] Thu muc $WORKSPACE_DIR ton tai nhung khong phai git repo."
@@ -146,19 +132,12 @@ if (-not $SKIP_WORKSPACE) {
     if ([string]::IsNullOrWhiteSpace($WS_TOKEN_PLAIN)) {
         Write-Host "[vgc-agent-kit] WARNING: Token workspace trong. Bo qua workspace setup."
     } else {
-        $WS_URL = "https://${WS_TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-workspace.git"
         Write-Host "[vgc-agent-kit] Dang clone workspace..."
-        & git clone --quiet $WS_URL $WORKSPACE_DIR 2>$null
+        & git clone --quiet "https://${WS_TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-workspace.git" $WORKSPACE_DIR 2>$null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[vgc-agent-kit] WARNING: Clone workspace that bai. Kiem tra token va quyen."
         } else {
             Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
-
-            # Strip token from remote URL + store credentials
-            & git -C $WORKSPACE_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
-            & git -C $WORKSPACE_DIR config credential.helper store
-            $wsCred = "protocol=https`nhost=github.com`nusername=${WS_TOKEN_PLAIN}`npassword=${WS_TOKEN_PLAIN}`n"
-            $wsCred | & git -C $WORKSPACE_DIR credential approve 2>$null
 
             # Auth gh CLI
             if ($ghInstalled) {
@@ -205,8 +184,6 @@ if (-not $SKIP_MOBILE) {
 }
 
 # Step 6: Symlink skills using Junction (no admin required)
-# SymbolicLink requires Administrator or Developer Mode enabled
-# Junction works for directories without elevation
 if (-not (Test-Path $SKILLS_DIR)) {
     New-Item -ItemType Directory -Path $SKILLS_DIR -Force | Out-Null
 }
@@ -223,7 +200,6 @@ Get-ChildItem -Path "$VGC_DIR\skills" -Directory | ForEach-Object {
     try {
         New-Item -ItemType Junction -Path $linkPath -Target $skillPath -Force | Out-Null
     } catch {
-        # Fallback to SymbolicLink if Junction fails (shouldn't happen on NTFS)
         New-Item -ItemType SymbolicLink -Path $linkPath -Target $skillPath -Force | Out-Null
     }
     Write-Host "[vgc-agent-kit] Linked skill: $skillName"
@@ -239,7 +215,7 @@ if (-not (Test-Path $profilePath)) {
     New-Item -ItemType File -Path $profilePath -Force | Out-Null
 }
 
-$aliasLine = "function vgc-agent-kit-update-codex { & `"$updateScript`" }"
+$aliasLine = "function vgc-agent-kit-update-codex { & git -C `"$VGC_DIR`" pull --ff-only }"
 
 if (-not (Select-String -Path $profilePath -Pattern "vgc-agent-kit-update-codex" -Quiet -ErrorAction SilentlyContinue)) {
     Add-Content -Path $profilePath -Value ""
@@ -248,7 +224,6 @@ if (-not (Select-String -Path $profilePath -Pattern "vgc-agent-kit-update-codex"
     Write-Host "[vgc-agent-kit] Alias added to PowerShell profile"
 }
 
-# Load alias in current session (equivalent to Mac's eval)
 Invoke-Expression $aliasLine
 
 Write-Host ""

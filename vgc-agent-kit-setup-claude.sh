@@ -6,6 +6,9 @@ VGC_DIR="$HOME/.vgc-agent-kit"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
 WORKSPACE_DIR="$HOME/.vgc-agent-workspace"
 
+# Never prompt for credentials — fail silently instead of exposing tokens
+export GIT_TERMINAL_PROMPT=0
+
 echo "======================================"
 echo "  VGC Agent Kit — Setup (Claude Code)"
 echo "======================================"
@@ -45,13 +48,7 @@ SKIP_CLONE=false
 if [ -d "$VGC_DIR" ]; then
     if [ -d "$VGC_DIR/.git" ]; then
         echo "[vgc-agent-kit] Repo đã tồn tại tại $VGC_DIR — dùng lại (skip clone)."
-        # Sanitize: strip any token from remote URL (fix from earlier installs)
-        CURRENT_URL="$(git -C "$VGC_DIR" remote get-url origin 2>/dev/null || true)"
-        if [[ "$CURRENT_URL" == *@github.com* && "$CURRENT_URL" != "git@"* ]]; then
-            git -C "$VGC_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
-            echo "[vgc-agent-kit] Đã xoá token khỏi remote URL."
-        fi
-        git -C "$VGC_DIR" pull --ff-only 2>/dev/null || true
+        git -C "$VGC_DIR" pull --ff-only 2>/dev/null || echo "[vgc-agent-kit] Pull skipped (offline hoặc token hết hạn)."
         SKIP_CLONE=true
     else
         echo "[vgc-agent-kit] Thư mục $VGC_DIR tồn tại nhưng không phải git repo."
@@ -79,22 +76,14 @@ if [ "$SKIP_CLONE" = false ]; then
         exit 1
     fi
 
-    # Step 5: Clone repo
-    REPO_URL="https://${GITHUB_TOKEN}@github.com/vgcorpvn/vgc-agent-kit.git"
+    # Step 5: Clone repo (token in URL for clone only)
     echo "[vgc-agent-kit] Đang clone repository..."
-    git clone --quiet "$REPO_URL" "$VGC_DIR" || {
+    git clone --quiet "https://${GITHUB_TOKEN}@github.com/vgcorpvn/vgc-agent-kit.git" "$VGC_DIR" || {
         echo "[vgc-agent-kit] ERROR: Clone thất bại. Kiểm tra lại token và quyền truy cập repo."
         exit 1
     }
 
     echo "[vgc-agent-kit] Clone thành công."
-
-    # Step 6: Strip token from remote URL + store credentials for future pulls
-    git -C "$VGC_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
-    git -C "$VGC_DIR" config credential.helper store
-    printf 'protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n' \
-        "$GITHUB_TOKEN" "$GITHUB_TOKEN" \
-        | git -C "$VGC_DIR" credential approve 2>/dev/null || true
 fi
 
 # Step 6b: Check/install gh CLI
@@ -136,13 +125,7 @@ SKIP_WORKSPACE=false
 if [ -d "$WORKSPACE_DIR" ]; then
     if [ -d "$WORKSPACE_DIR/.git" ]; then
         echo "[vgc-agent-kit] Workspace repo đã tồn tại — dùng lại."
-        # Sanitize: strip any token from remote URL
-        WS_URL="$(git -C "$WORKSPACE_DIR" remote get-url origin 2>/dev/null || true)"
-        if [[ "$WS_URL" == *@github.com* && "$WS_URL" != "git@"* ]]; then
-            git -C "$WORKSPACE_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
-            echo "[vgc-agent-kit] Đã xoá token khỏi workspace remote URL."
-        fi
-        git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || true
+        git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || echo "[vgc-agent-kit] Workspace pull skipped."
         SKIP_WORKSPACE=true
     else
         echo "[vgc-agent-kit] Thư mục $WORKSPACE_DIR tồn tại nhưng không phải git repo."
@@ -171,21 +154,13 @@ if [ "$SKIP_WORKSPACE" = false ]; then
     if [ -z "$WORKSPACE_TOKEN" ]; then
         echo "[vgc-agent-kit] WARNING: Token workspace trống. Bỏ qua workspace setup."
     else
-        WORKSPACE_URL="https://${WORKSPACE_TOKEN}@github.com/vgcorpvn/vgc-agent-workspace.git"
         echo "[vgc-agent-kit] Đang clone workspace..."
-        git clone --quiet "$WORKSPACE_URL" "$WORKSPACE_DIR" || {
+        git clone --quiet "https://${WORKSPACE_TOKEN}@github.com/vgcorpvn/vgc-agent-workspace.git" "$WORKSPACE_DIR" || {
             echo "[vgc-agent-kit] WARNING: Clone workspace thất bại. Kiểm tra token và quyền truy cập."
         }
 
         if [ -d "$WORKSPACE_DIR/.git" ]; then
             echo "[vgc-agent-kit] Workspace clone thành công."
-
-            # Strip token from remote URL + store credentials
-            git -C "$WORKSPACE_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
-            git -C "$WORKSPACE_DIR" config credential.helper store
-            printf 'protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n' \
-                "$WORKSPACE_TOKEN" "$WORKSPACE_TOKEN" \
-                | git -C "$WORKSPACE_DIR" credential approve 2>/dev/null || true
 
             # Auth gh CLI with workspace token
             if command -v gh &>/dev/null; then
