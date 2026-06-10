@@ -33,7 +33,7 @@ echo "[vgc-agent-kit] Git OK: $(git --version)"
 # Step 2: Check existing installation
 if [ -d "$VGC_DIR" ]; then
     echo "[vgc-agent-kit] Đã cài đặt trước đó tại $VGC_DIR"
-    read -rp "Ghi đè? (y/N): " overwrite
+    read -rp "Ghi đè? (y/N): " overwrite < /dev/tty
     if [[ "$overwrite" != "y" && "$overwrite" != "Y" ]]; then
         echo "[vgc-agent-kit] Huỷ bỏ."
         exit 0
@@ -46,7 +46,7 @@ echo ""
 echo "Cần GitHub Personal Access Token (PAT) với quyền repo:read."
 echo "Tạo tại: https://github.com/settings/tokens"
 echo ""
-read -rsp "Nhập GitHub token: " GITHUB_TOKEN
+read -rsp "Nhập GitHub token: " GITHUB_TOKEN < /dev/tty
 echo ""
 
 if [ -z "$GITHUB_TOKEN" ]; then
