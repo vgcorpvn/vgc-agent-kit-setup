@@ -15,11 +15,13 @@ Setup scripts cho VGC Agent Kit — bộ skills và knowledge dùng chung cho te
 bash <(curl -fsSL https://raw.githubusercontent.com/vgcorpvn/vgc-agent-kit-setup/main/vgc-agent-kit-setup-codex.sh)
 ```
 
-### Windows (PowerShell — Run as Administrator)
+### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/vgcorpvn/vgc-agent-kit-setup/main/vgc-agent-kit-setup-codex.ps1 | iex
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/vgcorpvn/vgc-agent-kit-setup/main/vgc-agent-kit-setup-codex.ps1 | iex"
 ```
+
+> Không cần Run as Administrator. Scheduled task (auto-update) sẽ bỏ qua nếu không có quyền Admin.
 
 ## Sau khi cài đặt
 
@@ -34,4 +36,4 @@ irm https://raw.githubusercontent.com/vgcorpvn/vgc-agent-kit-setup/main/vgc-agen
 | "Git chưa được cài đặt" | Mac: cài Xcode Command Line Tools. Windows: tải Git for Windows |
 | "Clone thất bại" | Kiểm tra token còn hạn và có quyền truy cập repo |
 | Skills không hiện trong Codex | Chạy `vgc-agent-kit-update-codex` rồi restart Codex |
-| Windows: "cannot create symbolic link" | Chạy PowerShell as Administrator |
+| Windows: "cannot create symbolic link" | Script đã dùng Junction thay vì Symlink — nếu vẫn lỗi, bật Developer Mode trong Settings |
