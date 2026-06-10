@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Khi chạy qua curl|bash, stdin/stdout bị pipe chiếm.
+# Redirect cả hai sang /dev/tty để script tương tác được.
+exec </dev/tty
+exec >/dev/tty
+
 VGC_DIR="$HOME/.vgc-agent-kit"
 SKILLS_DIR="$HOME/.agents/skills"
-REPO_URL_BASE="https://github.com/vgcorpvn/vgc-agent-kit.git"
 
 echo "======================================"
 echo "  VGC Agent Kit — Setup (Codex CLI)"
@@ -33,7 +37,7 @@ echo "[vgc-agent-kit] Git OK: $(git --version)"
 # Step 2: Check existing installation
 if [ -d "$VGC_DIR" ]; then
     echo "[vgc-agent-kit] Đã cài đặt trước đó tại $VGC_DIR"
-    read -rp "Ghi đè? (y/N): " overwrite < /dev/tty
+    read -rp "Ghi đè? (y/N): " overwrite
     if [[ "$overwrite" != "y" && "$overwrite" != "Y" ]]; then
         echo "[vgc-agent-kit] Huỷ bỏ."
         exit 0
@@ -46,7 +50,7 @@ echo ""
 echo "Cần GitHub Personal Access Token (PAT) với quyền repo:read."
 echo "Tạo tại: https://github.com/settings/tokens"
 echo ""
-read -rsp "Nhập GitHub token: " GITHUB_TOKEN < /dev/tty
+read -rsp "Nhập GitHub token: " GITHUB_TOKEN
 echo ""
 
 if [ -z "$GITHUB_TOKEN" ]; then
