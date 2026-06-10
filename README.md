@@ -27,13 +27,6 @@ irm https://raw.githubusercontent.com/vgcorpvn/vgc-agent-kit-setup/main/vgc-agen
 - Auto-update chạy mỗi ngày lúc 9h sáng
 - Update thủ công: chạy `vgc-agent-kit-update-codex` trong terminal
 
-## Tạo GitHub Token
-
-1. Vào https://github.com/settings/tokens
-2. Click "Generate new token (classic)"
-3. Chọn scope: `repo` (Full control of private repositories)
-4. Copy token và paste khi script hỏi
-
 ## Troubleshooting
 
 | Vấn đề | Giải pháp |
