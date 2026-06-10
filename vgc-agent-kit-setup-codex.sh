@@ -3,7 +3,7 @@ set -euo pipefail
 
 VGC_DIR="$HOME/.vgc-agent-kit"
 SKILLS_DIR="$HOME/.agents/skills"
-REPO_URL_BASE="https://github.com/vgcorp-tech/vgc-agent-kit.git"
+REPO_URL_BASE="https://github.com/vgcorpvn/vgc-agent-kit.git"
 
 echo "======================================"
 echo "  VGC Agent Kit — Setup (Codex CLI)"
@@ -55,7 +55,7 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 
 # Step 4: Clone repo
-REPO_URL="https://${GITHUB_TOKEN}@github.com/vgcorp-tech/vgc-agent-kit.git"
+REPO_URL="https://${GITHUB_TOKEN}@github.com/vgcorpvn/vgc-agent-kit.git"
 echo "[vgc-agent-kit] Đang clone repository..."
 git clone --quiet "$REPO_URL" "$VGC_DIR" || {
     echo "[vgc-agent-kit] ERROR: Clone thất bại. Kiểm tra lại token và quyền truy cập repo."

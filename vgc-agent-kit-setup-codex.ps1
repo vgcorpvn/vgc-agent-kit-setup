@@ -48,7 +48,7 @@ if ([string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
 }
 
 # Step 4: Clone repo
-$REPO_URL = "https://${TOKEN_PLAIN}@github.com/vgcorp-tech/vgc-agent-kit.git"
+$REPO_URL = "https://${TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-kit.git"
 Write-Host "[vgc-agent-kit] Dang clone repository..."
 git clone --quiet $REPO_URL $VGC_DIR 2>$null
 if ($LASTEXITCODE -ne 0) {

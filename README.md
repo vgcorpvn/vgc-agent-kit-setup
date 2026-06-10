@@ -12,13 +12,13 @@ Setup scripts cho VGC Agent Kit — bộ skills và knowledge dùng chung cho te
 ### Mac / Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vgcorp-tech/vgc-agent-kit-setup/main/vgc-agent-kit-setup-codex.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vgcorpvn/vgc-agent-kit-setup/main/vgc-agent-kit-setup-codex.sh | bash
 ```
 
 ### Windows (PowerShell — Run as Administrator)
 
 ```powershell
-irm https://raw.githubusercontent.com/vgcorp-tech/vgc-agent-kit-setup/main/vgc-agent-kit-setup-codex.ps1 | iex
+irm https://raw.githubusercontent.com/vgcorpvn/vgc-agent-kit-setup/main/vgc-agent-kit-setup-codex.ps1 | iex
 ```
 
 ## Sau khi cài đặt
