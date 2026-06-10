@@ -101,6 +101,9 @@ if ! grep -q "vgc-agent-kit-update-codex" "$SHELL_RC" 2>/dev/null; then
     echo "[vgc-agent-kit] Alias added to $SHELL_RC"
 fi
 
+# Load alias ngay trong session hiện tại
+eval "$ALIAS_LINE"
+
 echo ""
 echo "======================================"
 echo "  Setup hoàn tất!"
@@ -110,6 +113,4 @@ echo "  Skills location: $SKILLS_DIR"
 echo "  Repo location:   $VGC_DIR"
 echo "  Auto-update:     Daily lúc 9h sáng"
 echo "  Manual update:   vgc-agent-kit-update-codex"
-echo ""
-echo "  Mở terminal mới hoặc chạy: source $SHELL_RC"
 echo ""
