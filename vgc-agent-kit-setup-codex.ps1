@@ -22,49 +22,56 @@ try {
     exit 1
 }
 
-# Step 2: Check existing installation
+# Step 2: Check existing installation — reuse if already cloned (e.g. by Claude setup)
+$SKIP_CLONE = $false
 if (Test-Path $VGC_DIR) {
-    Write-Host "[vgc-agent-kit] Da cai dat truoc do tai $VGC_DIR"
-    $overwrite = Read-Host "Ghi de? (y/N)"
-    if ($overwrite -ne "y" -and $overwrite -ne "Y") {
-        Write-Host "[vgc-agent-kit] Huy bo."
-        exit 0
+    if (Test-Path "$VGC_DIR\.git") {
+        Write-Host "[vgc-agent-kit] Repo da ton tai tai $VGC_DIR — dung lai (skip clone)."
+        & git -C $VGC_DIR pull --ff-only 2>$null
+        $SKIP_CLONE = $true
+    } else {
+        Write-Host "[vgc-agent-kit] Thu muc $VGC_DIR ton tai nhung khong phai git repo."
+        $overwrite = Read-Host "Ghi de? (y/N)"
+        if ($overwrite -ne "y" -and $overwrite -ne "Y") {
+            Write-Host "[vgc-agent-kit] Huy bo."
+            exit 0
+        }
+        Remove-Item -Recurse -Force $VGC_DIR
     }
-    Remove-Item -Recurse -Force $VGC_DIR
 }
 
-# Step 3: Ask for token
-Write-Host ""
-Write-Host "Can GitHub Personal Access Token (PAT) voi quyen repo:read."
-Write-Host "Tao tai: https://github.com/settings/tokens"
-Write-Host ""
-$GITHUB_TOKEN = Read-Host "Nhap GitHub token" -AsSecureString
-$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($GITHUB_TOKEN)
-$TOKEN_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+if (-not $SKIP_CLONE) {
+    # Step 3: Ask for token
+    Write-Host ""
+    Write-Host "Can GitHub Personal Access Token (PAT) voi quyen repo:read."
+    Write-Host "Tao tai: https://github.com/settings/tokens"
+    Write-Host ""
+    $GITHUB_TOKEN = Read-Host "Nhap GitHub token" -AsSecureString
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($GITHUB_TOKEN)
+    $TOKEN_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
 
-if ([string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
-    Write-Host "[vgc-agent-kit] ERROR: Token khong duoc de trong."
-    exit 1
+    if ([string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
+        Write-Host "[vgc-agent-kit] ERROR: Token khong duoc de trong."
+        exit 1
+    }
+
+    # Step 4: Clone repo
+    $REPO_URL = "https://${TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-kit.git"
+    Write-Host "[vgc-agent-kit] Dang clone repository..."
+    & git clone --quiet $REPO_URL $VGC_DIR 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[vgc-agent-kit] ERROR: Clone that bai. Kiem tra lai token va quyen truy cap repo."
+        exit 1
+    }
+
+    Write-Host "[vgc-agent-kit] Clone thanh cong."
+
+    # Step 5: Store credentials for future pulls
+    & git -C $VGC_DIR config credential.helper store
+    $credentialInput = "protocol=https`nhost=github.com`nusername=${TOKEN_PLAIN}`npassword=${TOKEN_PLAIN}`n"
+    $credentialInput | & git -C $VGC_DIR credential approve 2>$null
 }
-
-# Step 4: Clone repo
-$REPO_URL = "https://${TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-kit.git"
-Write-Host "[vgc-agent-kit] Dang clone repository..."
-& git clone --quiet $REPO_URL $VGC_DIR 2>$null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[vgc-agent-kit] ERROR: Clone that bai. Kiem tra lai token va quyen truy cap repo."
-    exit 1
-}
-
-Write-Host "[vgc-agent-kit] Clone thanh cong."
-
-# Step 5: Store credentials for future pulls
-# Use git credential-store (file-based, cross-platform) instead of credential manager
-# to match Mac behavior — token is saved immediately for future git pull
-& git -C $VGC_DIR config credential.helper store
-$credentialInput = "protocol=https`nhost=github.com`nusername=${TOKEN_PLAIN}`npassword=${TOKEN_PLAIN}`n"
-$credentialInput | & git -C $VGC_DIR credential approve 2>$null
 
 # Step 6: Symlink skills using Junction (no admin required)
 # SymbolicLink requires Administrator or Developer Mode enabled
