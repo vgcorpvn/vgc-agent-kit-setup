@@ -199,20 +199,30 @@ if [ "$SKIP_WORKSPACE" = false ]; then
 fi
 
 # Step 6d: Store mobile repo token for gh api access (optional)
-echo ""
-echo "Cần GitHub Token thứ 2 (PAT) với quyền repo:read cho mobile repo."
-echo "Token này dùng để agent đọc screen-index.json và source code."
-echo "(Bỏ qua nếu không cần discover-screen skill)"
-echo ""
-read -rsp "Nhập GitHub token (mobile, Enter để bỏ qua): " MOBILE_TOKEN
-echo ""
+SKIP_MOBILE=false
+if command -v gh &>/dev/null; then
+    if gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
+        echo "[vgc-agent-kit] Mobile repo đã truy cập được — skip token."
+        SKIP_MOBILE=true
+    fi
+fi
 
-if [ -n "$MOBILE_TOKEN" ]; then
-    git config --global credential.helper store
-    printf 'protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n' \
-        "$MOBILE_TOKEN" "$MOBILE_TOKEN" \
-        | git credential approve 2>/dev/null || true
-    echo "[vgc-agent-kit] Mobile repo token đã lưu."
+if [ "$SKIP_MOBILE" = false ]; then
+    echo ""
+    echo "Cần GitHub Token thứ 2 (PAT) với quyền repo:read cho mobile repo."
+    echo "Token này dùng để agent đọc screen-index.json và source code."
+    echo "(Bỏ qua nếu không cần discover-screen skill)"
+    echo ""
+    read -rsp "Nhập GitHub token (mobile, Enter để bỏ qua): " MOBILE_TOKEN
+    echo ""
+
+    if [ -n "$MOBILE_TOKEN" ]; then
+        git config --global credential.helper store
+        printf 'protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n' \
+            "$MOBILE_TOKEN" "$MOBILE_TOKEN" \
+            | git credential approve 2>/dev/null || true
+        echo "[vgc-agent-kit] Mobile repo token đã lưu."
+    fi
 fi
 
 # Step 7: Symlink skills to ~/.claude/skills/

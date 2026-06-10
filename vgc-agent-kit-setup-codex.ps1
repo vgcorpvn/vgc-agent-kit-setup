@@ -174,21 +174,34 @@ if (-not $SKIP_WORKSPACE) {
 }
 
 # Step 5d: Store mobile repo token for gh api access (optional)
-Write-Host ""
-Write-Host "Can GitHub Token thu 2 (PAT) voi quyen repo:read cho mobile repo."
-Write-Host "Token nay dung de agent doc screen-index.json va source code."
-Write-Host "(Bo qua neu khong can discover-screen skill)"
-Write-Host ""
-$MOBILE_TOKEN = Read-Host "Nhap GitHub token (mobile, Enter de bo qua)" -AsSecureString
-$BSTR_M = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($MOBILE_TOKEN)
-$MOBILE_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_M)
-[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_M)
+$SKIP_MOBILE = $false
+if ($ghInstalled) {
+    try {
+        $mobileCheck = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
+        if ($mobileCheck -eq "mobile.vhandicap.com") {
+            Write-Host "[vgc-agent-kit] Mobile repo da truy cap duoc — skip token."
+            $SKIP_MOBILE = $true
+        }
+    } catch {}
+}
 
-if (-not [string]::IsNullOrWhiteSpace($MOBILE_PLAIN)) {
-    & git config --global credential.helper store
-    $mobileCred = "protocol=https`nhost=github.com`nusername=${MOBILE_PLAIN}`npassword=${MOBILE_PLAIN}`n"
-    $mobileCred | & git credential approve 2>$null
-    Write-Host "[vgc-agent-kit] Mobile repo token da luu."
+if (-not $SKIP_MOBILE) {
+    Write-Host ""
+    Write-Host "Can GitHub Token thu 2 (PAT) voi quyen repo:read cho mobile repo."
+    Write-Host "Token nay dung de agent doc screen-index.json va source code."
+    Write-Host "(Bo qua neu khong can discover-screen skill)"
+    Write-Host ""
+    $MOBILE_TOKEN = Read-Host "Nhap GitHub token (mobile, Enter de bo qua)" -AsSecureString
+    $BSTR_M = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($MOBILE_TOKEN)
+    $MOBILE_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_M)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_M)
+
+    if (-not [string]::IsNullOrWhiteSpace($MOBILE_PLAIN)) {
+        & git config --global credential.helper store
+        $mobileCred = "protocol=https`nhost=github.com`nusername=${MOBILE_PLAIN}`npassword=${MOBILE_PLAIN}`n"
+        $mobileCred | & git credential approve 2>$null
+        Write-Host "[vgc-agent-kit] Mobile repo token da luu."
+    }
 }
 
 # Step 6: Symlink skills using Junction (no admin required)
