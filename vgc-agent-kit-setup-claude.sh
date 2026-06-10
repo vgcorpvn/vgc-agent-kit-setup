@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'echo "[vgc-agent-kit] ERROR: Script thất bại tại dòng $LINENO (exit code $?)" >&2' ERR
 
 VGC_DIR="$HOME/.vgc-agent-kit"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
@@ -97,14 +98,16 @@ for skill_dir in "$VGC_DIR"/skills/*/; do
     echo "[vgc-agent-kit] Linked skill: $skill_name"
 done
 
-# Step 8: Install cronjob
-CRON_CMD="cd $VGC_DIR && git pull --ff-only"
-CRON_ENTRY="0 9 * * * $CRON_CMD >/dev/null 2>&1"
-
-EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
-FILTERED_CRON="$(echo "$EXISTING_CRON" | grep -v "vgc-agent-kit-update-claude" || true)"
-(echo "$FILTERED_CRON"; echo "$CRON_ENTRY") | crontab -
-echo "[vgc-agent-kit] Cronjob cài đặt: chạy mỗi ngày lúc 9h sáng."
+# Step 8: Install cronjob (best-effort — không kill script nếu fail)
+if EXISTING_CRON="$(crontab -l 2>/dev/null || true)" && \
+   FILTERED_CRON="$(echo "$EXISTING_CRON" | grep -v "vgc-agent-kit-update-claude" || true)" && \
+   CRON_CMD="cd $VGC_DIR && git pull --ff-only" && \
+   CRON_ENTRY="0 9 * * * $CRON_CMD >/dev/null 2>&1" && \
+   (echo "$FILTERED_CRON"; echo "$CRON_ENTRY") | crontab -; then
+    echo "[vgc-agent-kit] Cronjob cài đặt: chạy mỗi ngày lúc 9h sáng."
+else
+    echo "[vgc-agent-kit] WARNING: Không thể cài cronjob. Bạn có thể cập nhật thủ công: vgc-agent-kit-update-claude"
+fi
 
 # Step 9: Add alias
 SHELL_RC="$HOME/.zshrc"
@@ -115,13 +118,15 @@ fi
 ALIAS_LINE="alias vgc-agent-kit-update-claude=\"cd $VGC_DIR && git pull --ff-only\""
 
 if ! grep -q "vgc-agent-kit-update-claude" "$SHELL_RC" 2>/dev/null; then
-    echo "" >>"$SHELL_RC"
-    echo "# VGC Agent Kit (Claude Code)" >>"$SHELL_RC"
-    echo "$ALIAS_LINE" >>"$SHELL_RC"
+    {
+        echo ""
+        echo "# VGC Agent Kit (Claude Code)"
+        echo "$ALIAS_LINE"
+    } >> "$SHELL_RC" || echo "[vgc-agent-kit] WARNING: Không thể ghi alias vào $SHELL_RC"
     echo "[vgc-agent-kit] Alias added to $SHELL_RC"
 fi
 
-eval "$ALIAS_LINE"
+eval "$ALIAS_LINE" 2>/dev/null || true
 
 echo ""
 echo "======================================"
