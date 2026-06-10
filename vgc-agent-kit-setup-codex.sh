@@ -92,7 +92,9 @@ done
 CRON_CMD="$VGC_DIR/scripts/vgc-agent-kit-update-codex.sh"
 CRON_ENTRY="0 9 * * * $CRON_CMD >/dev/null 2>&1"
 
-(crontab -l 2>/dev/null | grep -v "vgc-agent-kit-update-codex"; echo "$CRON_ENTRY") | crontab -
+EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
+FILTERED_CRON="$(echo "$EXISTING_CRON" | grep -v "vgc-agent-kit-update-codex" || true)"
+(echo "$FILTERED_CRON"; echo "$CRON_ENTRY") | crontab -
 echo "[vgc-agent-kit] Cronjob cài đặt: chạy mỗi ngày lúc 9h sáng."
 
 # Step 8: Add alias
