@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $VGC_DIR = "$env:USERPROFILE\.vgc-agent-kit"
 $CLAUDE_SKILLS_DIR = "$env:USERPROFILE\.claude\skills"
+$WORKSPACE_DIR = "$env:USERPROFILE\.vgc-agent-workspace"
 
 Write-Host "======================================"
 Write-Host "  VGC Agent Kit - Setup (Claude Code)"
@@ -80,6 +81,86 @@ if (-not $SKIP_CLONE) {
     $credentialInput | & git -C $VGC_DIR credential approve 2>$null
 }
 
+# Step 6b: Check/install gh CLI
+$ghInstalled = $false
+try {
+    $ghVersion = & gh --version 2>$null | Select-Object -First 1
+    if ($ghVersion) {
+        Write-Host "[vgc-agent-kit] gh CLI OK: $ghVersion"
+        $ghInstalled = $true
+    }
+} catch {}
+
+if (-not $ghInstalled) {
+    Write-Host "[vgc-agent-kit] GitHub CLI (gh) chua cai. Dang cai..."
+    try {
+        & winget install GitHub.cli --accept-package-agreements --accept-source-agreements 2>$null
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        $ghInstalled = $true
+        Write-Host "[vgc-agent-kit] gh CLI da cai thanh cong."
+    } catch {
+        Write-Host "[vgc-agent-kit] WARNING: Khong the cai gh. Cai thu cong: https://cli.github.com/"
+    }
+}
+
+# Step 6c: Clone workspace repo
+$SKIP_WORKSPACE = $false
+if (Test-Path $WORKSPACE_DIR) {
+    if (Test-Path "$WORKSPACE_DIR\.git") {
+        Write-Host "[vgc-agent-kit] Workspace repo da ton tai — dung lai."
+        & git -C $WORKSPACE_DIR pull --ff-only 2>$null
+        $SKIP_WORKSPACE = $true
+    } else {
+        Write-Host "[vgc-agent-kit] Thu muc $WORKSPACE_DIR ton tai nhung khong phai git repo."
+        $overwriteWs = Read-Host "Ghi de? (y/N)"
+        if ($overwriteWs -ne "y" -and $overwriteWs -ne "Y") {
+            Write-Host "[vgc-agent-kit] Bo qua workspace setup."
+            $SKIP_WORKSPACE = $true
+        } else {
+            Remove-Item -Recurse -Force $WORKSPACE_DIR
+        }
+    }
+}
+
+if (-not $SKIP_WORKSPACE) {
+    Write-Host ""
+    Write-Host "Can GitHub Token thu 2 (PAT) voi quyen repo:read+write cho workspace."
+    Write-Host "Token nay dung de push output len vgc-agent-workspace."
+    Write-Host ""
+    $WS_TOKEN = Read-Host "Nhap GitHub token (workspace)" -AsSecureString
+    $BSTR_WS = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($WS_TOKEN)
+    $WS_TOKEN_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_WS)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_WS)
+
+    if ([string]::IsNullOrWhiteSpace($WS_TOKEN_PLAIN)) {
+        Write-Host "[vgc-agent-kit] WARNING: Token workspace trong. Bo qua workspace setup."
+    } else {
+        $WS_URL = "https://${WS_TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-workspace.git"
+        Write-Host "[vgc-agent-kit] Dang clone workspace..."
+        & git clone --quiet $WS_URL $WORKSPACE_DIR 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[vgc-agent-kit] WARNING: Clone workspace that bai. Kiem tra token va quyen."
+        } else {
+            Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
+
+            # Store workspace credentials
+            & git -C $WORKSPACE_DIR config credential.helper store
+            $wsCred = "protocol=https`nhost=github.com`nusername=${WS_TOKEN_PLAIN}`npassword=${WS_TOKEN_PLAIN}`n"
+            $wsCred | & git -C $WORKSPACE_DIR credential approve 2>$null
+
+            # Auth gh CLI
+            if ($ghInstalled) {
+                try {
+                    $WS_TOKEN_PLAIN | & gh auth login --with-token 2>$null
+                    Write-Host "[vgc-agent-kit] gh CLI da auth."
+                } catch {
+                    Write-Host "[vgc-agent-kit] WARNING: gh auth login that bai."
+                }
+            }
+        }
+    }
+}
+
 # Step 7: Symlink skills to ~/.claude/skills/ (Junction, no admin needed)
 if (-not (Test-Path $CLAUDE_SKILLS_DIR)) {
     New-Item -ItemType Directory -Path $CLAUDE_SKILLS_DIR -Force | Out-Null
@@ -102,27 +183,7 @@ Get-ChildItem -Path "$VGC_DIR\skills" -Directory | ForEach-Object {
     Write-Host "[vgc-agent-kit] Linked skill: $skillName"
 }
 
-# Step 8: Install scheduled task (best-effort)
-$taskName = "VGCAgentKitUpdateClaude"
-
-try {
-    $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if ($existingTask) {
-        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-    }
-
-    $action = New-ScheduledTaskAction -Execute "git" -Argument "-C `"$VGC_DIR`" pull --ff-only"
-    $trigger = New-ScheduledTaskTrigger -Daily -At 9am
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "VGC Agent Kit daily update (Claude)" | Out-Null
-
-    Write-Host "[vgc-agent-kit] Scheduled task cai dat: chay moi ngay luc 9h sang."
-} catch {
-    Write-Host "[vgc-agent-kit] WARNING: Khong the tao scheduled task (can quyen Admin)."
-    Write-Host "[vgc-agent-kit] Ban co the chay thu cong: vgc-agent-kit-update-claude"
-}
-
-# Step 9: Add alias to PowerShell profile
+# Step 8: Add alias to PowerShell profile
 $profilePath = $PROFILE
 if (-not (Test-Path $profilePath)) {
     $profileDir = Split-Path $profilePath -Parent
@@ -150,7 +211,8 @@ Write-Host "======================================"
 Write-Host ""
 Write-Host "  Skills location: $CLAUDE_SKILLS_DIR"
 Write-Host "  Repo location: $VGC_DIR"
-Write-Host "  Auto-update:   Daily luc 9h sang"
+Write-Host "  Workspace:     $WORKSPACE_DIR"
+Write-Host "  Auto-sync:     Pull tu dong moi khi dung skill"
 Write-Host "  Manual update: vgc-agent-kit-update-claude"
 Write-Host ""
 Write-Host "  Khoi dong lai Claude Code de load skills."

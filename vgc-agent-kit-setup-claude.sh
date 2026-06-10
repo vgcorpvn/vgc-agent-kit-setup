@@ -4,6 +4,7 @@ trap 'echo "[vgc-agent-kit] ERROR: Script thất bại tại dòng $LINENO (exit
 
 VGC_DIR="$HOME/.vgc-agent-kit"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
+WORKSPACE_DIR="$HOME/.vgc-agent-workspace"
 
 echo "======================================"
 echo "  VGC Agent Kit — Setup (Claude Code)"
@@ -87,6 +88,95 @@ if [ "$SKIP_CLONE" = false ]; then
         | git -C "$VGC_DIR" credential approve 2>/dev/null || true
 fi
 
+# Step 6b: Check/install gh CLI
+if ! command -v gh &>/dev/null; then
+    echo "[vgc-agent-kit] GitHub CLI (gh) chưa cài. Đang cài..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        if command -v brew &>/dev/null; then
+            brew install gh 2>/dev/null || {
+                echo "[vgc-agent-kit] WARNING: Không thể cài gh qua brew."
+                echo "[vgc-agent-kit] Cài thủ công: https://cli.github.com/"
+            }
+        else
+            echo "[vgc-agent-kit] WARNING: Homebrew chưa cài. Cài gh thủ công:"
+            echo "  https://cli.github.com/"
+        fi
+    else
+        if command -v apt-get &>/dev/null; then
+            (type -p wget >/dev/null || sudo apt-get install wget -y) && \
+            sudo mkdir -p -m 755 /etc/apt/keyrings && \
+            wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && \
+            sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+            sudo apt-get update && sudo apt-get install gh -y
+        else
+            echo "[vgc-agent-kit] WARNING: Không thể tự cài gh. Cài thủ công:"
+            echo "  https://cli.github.com/"
+        fi
+    fi
+fi
+
+if command -v gh &>/dev/null; then
+    echo "[vgc-agent-kit] gh CLI OK: $(gh --version | head -1)"
+else
+    echo "[vgc-agent-kit] WARNING: gh CLI không có. Tạo PR thủ công khi dùng /vgc-agent-kit-publish."
+fi
+
+# Step 6c: Clone workspace repo
+SKIP_WORKSPACE=false
+if [ -d "$WORKSPACE_DIR" ]; then
+    if [ -d "$WORKSPACE_DIR/.git" ]; then
+        echo "[vgc-agent-kit] Workspace repo đã tồn tại — dùng lại."
+        git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || true
+        SKIP_WORKSPACE=true
+    else
+        echo "[vgc-agent-kit] Thư mục $WORKSPACE_DIR tồn tại nhưng không phải git repo."
+        read -rp "Ghi đè? (y/N): " overwrite_ws
+        if [[ "$overwrite_ws" != "y" && "$overwrite_ws" != "Y" ]]; then
+            echo "[vgc-agent-kit] Bỏ qua workspace setup."
+            SKIP_WORKSPACE=true
+        else
+            rm -rf "$WORKSPACE_DIR"
+        fi
+    fi
+fi
+
+if [ "$SKIP_WORKSPACE" = false ]; then
+    echo ""
+    echo "Cần GitHub Token thứ 2 (PAT) với quyền repo:read+write cho workspace."
+    echo "Token này dùng để push output lên vgc-agent-workspace."
+    echo ""
+    read -rsp "Nhập GitHub token (workspace): " WORKSPACE_TOKEN
+    echo ""
+
+    if [ -z "$WORKSPACE_TOKEN" ]; then
+        echo "[vgc-agent-kit] WARNING: Token workspace trống. Bỏ qua workspace setup."
+    else
+        WORKSPACE_URL="https://${WORKSPACE_TOKEN}@github.com/vgcorpvn/vgc-agent-workspace.git"
+        echo "[vgc-agent-kit] Đang clone workspace..."
+        git clone --quiet "$WORKSPACE_URL" "$WORKSPACE_DIR" || {
+            echo "[vgc-agent-kit] WARNING: Clone workspace thất bại. Kiểm tra token và quyền truy cập."
+        }
+
+        if [ -d "$WORKSPACE_DIR/.git" ]; then
+            echo "[vgc-agent-kit] Workspace clone thành công."
+
+            # Store workspace credentials
+            git -C "$WORKSPACE_DIR" config credential.helper store
+            echo "https://${WORKSPACE_TOKEN}@github.com" \
+                | git -C "$WORKSPACE_DIR" credential approve 2>/dev/null || true
+
+            # Auth gh CLI with workspace token
+            if command -v gh &>/dev/null; then
+                echo "$WORKSPACE_TOKEN" | gh auth login --with-token 2>/dev/null || {
+                    echo "[vgc-agent-kit] WARNING: gh auth login thất bại. Tạo PR thủ công."
+                }
+                echo "[vgc-agent-kit] gh CLI đã auth."
+            fi
+        fi
+    fi
+fi
+
 # Step 7: Symlink skills to ~/.claude/skills/
 mkdir -p "$CLAUDE_SKILLS_DIR"
 
@@ -98,18 +188,7 @@ for skill_dir in "$VGC_DIR"/skills/*/; do
     echo "[vgc-agent-kit] Linked skill: $skill_name"
 done
 
-# Step 8: Install cronjob (best-effort — không kill script nếu fail)
-CRON_CMD="$VGC_DIR/scripts/vgc-agent-kit-update-claude.sh"
-CRON_ENTRY="0 9 * * * $CRON_CMD >/dev/null 2>&1"
-if EXISTING_CRON="$(crontab -l 2>/dev/null || true)" && \
-   FILTERED_CRON="$(echo "$EXISTING_CRON" | grep -v "vgc-agent-kit-update-claude" || true)" && \
-   (echo "$FILTERED_CRON"; echo "$CRON_ENTRY") | crontab -; then
-    echo "[vgc-agent-kit] Cronjob cài đặt: chạy mỗi ngày lúc 9h sáng."
-else
-    echo "[vgc-agent-kit] WARNING: Không thể cài cronjob. Bạn có thể cập nhật thủ công: vgc-agent-kit-update-claude"
-fi
-
-# Step 9: Add alias
+# Step 8: Add alias
 SHELL_RC="$HOME/.zshrc"
 if [ -f "$HOME/.bashrc" ] && [ ! -f "$HOME/.zshrc" ]; then
     SHELL_RC="$HOME/.bashrc"
@@ -135,7 +214,8 @@ echo "======================================"
 echo ""
 echo "  Skills location: $CLAUDE_SKILLS_DIR"
 echo "  Repo location:   $VGC_DIR"
-echo "  Auto-update:     Daily lúc 9h sáng"
+echo "  Workspace:       $WORKSPACE_DIR"
+echo "  Auto-sync:       Pull tự động mỗi khi dùng skill"
 echo "  Manual update:   vgc-agent-kit-update-claude"
 echo ""
 echo "  Khởi động lại Claude Code để load skills."
