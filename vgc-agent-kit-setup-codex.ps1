@@ -30,6 +30,19 @@ try {
 $SKIP_CLONE = $false
 if (Test-Path $VGC_DIR) {
     if (Test-Path "$VGC_DIR\.git") {
+        # Check if remote URL has token — if not, token was stripped and we need to re-auth
+        $currentUrl = & git -C $VGC_DIR remote get-url origin 2>$null
+        if ($currentUrl -eq "https://github.com/vgcorpvn/vgc-agent-kit.git") {
+            Write-Host "[vgc-agent-kit] URL khong co token — can nhap lai token de xac thuc."
+            $tokenInput = Read-Host "Nhap GitHub token (PAT, repo:read+write)"
+            if ([string]::IsNullOrWhiteSpace($tokenInput)) {
+                Write-Host "[vgc-agent-kit] ERROR: Token khong duoc de trong."
+                exit 1
+            }
+            & git -C $VGC_DIR remote set-url origin "https://${tokenInput}@github.com/vgcorpvn/vgc-agent-kit.git"
+            Write-Host "[vgc-agent-kit] Token da duoc cap nhat vao remote URL."
+            $GITHUB_TOKEN = $tokenInput
+        }
         Write-Host "[vgc-agent-kit] Repo da ton tai tai $VGC_DIR — dung lai (skip clone)."
         & git -C $VGC_DIR pull --ff-only 2>$null
         if ($LASTEXITCODE -ne 0) { Write-Host "[vgc-agent-kit] Pull skipped (offline hoac token het han)." }
@@ -99,6 +112,21 @@ if (-not $ghInstalled) {
 $SKIP_WORKSPACE = $false
 if (Test-Path $WORKSPACE_DIR) {
     if (Test-Path "$WORKSPACE_DIR\.git") {
+        # Check if remote URL has token — if not, re-prompt
+        $wsUrl = & git -C $WORKSPACE_DIR remote get-url origin 2>$null
+        if ($wsUrl -eq "https://github.com/vgcorpvn/vgc-agent-workspace.git") {
+            if (-not [string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
+                $WS_TOKEN_PLAIN = $TOKEN_PLAIN
+                Write-Host "[vgc-agent-kit] Workspace URL khong co token — cap nhat bang kit token."
+            } else {
+                Write-Host "[vgc-agent-kit] Workspace URL khong co token — can nhap lai."
+                $wsTokenInput = Read-Host "Nhap GitHub token (PAT, repo:read+write)"
+                $WS_TOKEN_PLAIN = $wsTokenInput
+            }
+            if (-not [string]::IsNullOrWhiteSpace($WS_TOKEN_PLAIN)) {
+                & git -C $WORKSPACE_DIR remote set-url origin "https://${WS_TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-workspace.git"
+            }
+        }
         Write-Host "[vgc-agent-kit] Workspace repo da ton tai — dung lai."
         & git -C $WORKSPACE_DIR pull --ff-only 2>$null
         if ($LASTEXITCODE -ne 0) { Write-Host "[vgc-agent-kit] Workspace pull skipped." }

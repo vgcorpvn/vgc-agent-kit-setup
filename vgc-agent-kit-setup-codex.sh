@@ -38,6 +38,20 @@ echo "[vgc-agent-kit] Git OK: $(git --version)"
 SKIP_CLONE=false
 if [ -d "$VGC_DIR" ]; then
     if [ -d "$VGC_DIR/.git" ]; then
+        # Check if remote URL has token — if not, token was stripped and we need to re-auth
+        CURRENT_URL="$(git -C "$VGC_DIR" remote get-url origin 2>/dev/null || echo "")"
+        if [[ "$CURRENT_URL" == "https://github.com/vgcorpvn/vgc-agent-kit.git" ]]; then
+            echo "[vgc-agent-kit] URL không có token — cần nhập lại token để xác thực."
+            echo ""
+            read -rsp "Nhập GitHub token (PAT, repo:read+write): " GITHUB_TOKEN
+            echo ""
+            if [ -z "$GITHUB_TOKEN" ]; then
+                echo "[vgc-agent-kit] ERROR: Token không được để trống."
+                exit 1
+            fi
+            git -C "$VGC_DIR" remote set-url origin "https://${GITHUB_TOKEN}@github.com/vgcorpvn/vgc-agent-kit.git"
+            echo "[vgc-agent-kit] Token đã được cập nhật vào remote URL."
+        fi
         echo "[vgc-agent-kit] Repo đã tồn tại tại $VGC_DIR — dùng lại (skip clone)."
         git -C "$VGC_DIR" pull --ff-only 2>/dev/null || echo "[vgc-agent-kit] Pull skipped (offline hoặc token hết hạn)."
         SKIP_CLONE=true
@@ -115,6 +129,21 @@ fi
 SKIP_WORKSPACE=false
 if [ -d "$WORKSPACE_DIR" ]; then
     if [ -d "$WORKSPACE_DIR/.git" ]; then
+        # Check if remote URL has token — if not, re-prompt
+        WS_URL="$(git -C "$WORKSPACE_DIR" remote get-url origin 2>/dev/null || echo "")"
+        if [[ "$WS_URL" == "https://github.com/vgcorpvn/vgc-agent-workspace.git" ]]; then
+            if [ -n "${GITHUB_TOKEN:-}" ]; then
+                WS_TOKEN="$GITHUB_TOKEN"
+                echo "[vgc-agent-kit] Workspace URL không có token — cập nhật bằng kit token."
+            else
+                echo "[vgc-agent-kit] Workspace URL không có token — cần nhập lại."
+                read -rsp "Nhập GitHub token (PAT, repo:read+write): " WS_TOKEN
+                echo ""
+            fi
+            if [ -n "$WS_TOKEN" ]; then
+                git -C "$WORKSPACE_DIR" remote set-url origin "https://${WS_TOKEN}@github.com/vgcorpvn/vgc-agent-workspace.git"
+            fi
+        fi
         echo "[vgc-agent-kit] Workspace repo đã tồn tại — dùng lại."
         git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || echo "[vgc-agent-kit] Workspace pull skipped."
         SKIP_WORKSPACE=true
