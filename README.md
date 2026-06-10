@@ -5,10 +5,8 @@ Setup scripts cho VGC Agent Kit — bộ skills và knowledge dùng chung cho te
 ## Yêu cầu
 
 - **Claude Code** hoặc **Codex CLI** đã cài đặt
-- **GitHub Personal Access Token A** với quyền `repo:read` cho private repo `vgc-agent-kit`
-- **GitHub Personal Access Token B** với quyền `repo:read+write` cho private repo `vgc-agent-workspace`
-
-> Token A và Token B có thể là cùng 1 token nếu token đó có đủ quyền cho cả 2 repo.
+- **GitHub Personal Access Token A** với quyền `repo:read+write` cho `vgc-agent-kit` và `vgc-agent-workspace`
+- **GitHub Personal Access Token B** (optional) với quyền `repo:read` cho mobile repo — cần cho `/discover-screen` skill
 
 ## Cài đặt cho Claude Code
 

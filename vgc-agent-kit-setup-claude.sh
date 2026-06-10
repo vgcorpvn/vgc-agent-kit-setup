@@ -61,7 +61,8 @@ fi
 if [ "$SKIP_CLONE" = false ]; then
     # Step 4: Ask for token
     echo ""
-    echo "Cần GitHub Personal Access Token (PAT) với quyền repo:read."
+    echo "Cần GitHub Personal Access Token (PAT) với quyền repo:read+write."
+    echo "Token này dùng cho cả vgc-agent-kit và vgc-agent-workspace."
     echo "Tạo tại: https://github.com/settings/tokens"
     echo ""
     read -rsp "Nhập GitHub token: " GITHUB_TOKEN
@@ -142,12 +143,16 @@ if [ -d "$WORKSPACE_DIR" ]; then
 fi
 
 if [ "$SKIP_WORKSPACE" = false ]; then
-    echo ""
-    echo "Cần GitHub Token thứ 2 (PAT) với quyền repo:read+write cho workspace."
-    echo "Token này dùng để push output lên vgc-agent-workspace."
-    echo ""
-    read -rsp "Nhập GitHub token (workspace): " WORKSPACE_TOKEN
-    echo ""
+    # Reuse Token A for workspace (same token, read+write)
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        WORKSPACE_TOKEN="$GITHUB_TOKEN"
+        echo "[vgc-agent-kit] Dùng cùng token cho workspace (read+write)."
+    else
+        echo ""
+        echo "Cần GitHub token (PAT) với quyền repo:read+write cho workspace."
+        read -rsp "Nhập GitHub token: " WORKSPACE_TOKEN
+        echo ""
+    fi
 
     if [ -z "$WORKSPACE_TOKEN" ]; then
         echo "[vgc-agent-kit] WARNING: Token workspace trống. Bỏ qua workspace setup."
@@ -175,6 +180,22 @@ if [ "$SKIP_WORKSPACE" = false ]; then
             fi
         fi
     fi
+fi
+
+# Step 6d: Store mobile repo token for gh api access (optional)
+echo ""
+echo "Cần GitHub Token thứ 2 (PAT) với quyền repo:read cho mobile repo."
+echo "Token này dùng để agent đọc screen-index.json và source code."
+echo "(Bỏ qua nếu không cần discover-screen skill)"
+echo ""
+read -rsp "Nhập GitHub token (mobile, Enter để bỏ qua): " MOBILE_TOKEN
+echo ""
+
+if [ -n "$MOBILE_TOKEN" ]; then
+    git config --global credential.helper store
+    echo "https://${MOBILE_TOKEN}@github.com" \
+        | git credential approve 2>/dev/null || true
+    echo "[vgc-agent-kit] Mobile repo token đã lưu."
 fi
 
 # Step 7: Symlink skills to ~/.claude/skills/

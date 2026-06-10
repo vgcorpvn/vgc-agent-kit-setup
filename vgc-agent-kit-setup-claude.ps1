@@ -51,7 +51,8 @@ if (Test-Path $VGC_DIR) {
 if (-not $SKIP_CLONE) {
     # Step 4: Ask for token
     Write-Host ""
-    Write-Host "Can GitHub Personal Access Token (PAT) voi quyen repo:read."
+    Write-Host "Can GitHub Personal Access Token (PAT) voi quyen repo:read+write."
+    Write-Host "Token nay dung cho ca vgc-agent-kit va vgc-agent-workspace."
     Write-Host "Tao tai: https://github.com/settings/tokens"
     Write-Host ""
     $GITHUB_TOKEN = Read-Host "Nhap GitHub token" -AsSecureString
@@ -123,14 +124,18 @@ if (Test-Path $WORKSPACE_DIR) {
 }
 
 if (-not $SKIP_WORKSPACE) {
-    Write-Host ""
-    Write-Host "Can GitHub Token thu 2 (PAT) voi quyen repo:read+write cho workspace."
-    Write-Host "Token nay dung de push output len vgc-agent-workspace."
-    Write-Host ""
-    $WS_TOKEN = Read-Host "Nhap GitHub token (workspace)" -AsSecureString
-    $BSTR_WS = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($WS_TOKEN)
-    $WS_TOKEN_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_WS)
-    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_WS)
+    # Reuse Token A for workspace (same token, read+write)
+    if (-not [string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
+        $WS_TOKEN_PLAIN = $TOKEN_PLAIN
+        Write-Host "[vgc-agent-kit] Dung cung token cho workspace (read+write)."
+    } else {
+        Write-Host ""
+        Write-Host "Can GitHub token (PAT) voi quyen repo:read+write cho workspace."
+        $WS_TOKEN = Read-Host "Nhap GitHub token" -AsSecureString
+        $BSTR_WS = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($WS_TOKEN)
+        $WS_TOKEN_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_WS)
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_WS)
+    }
 
     if ([string]::IsNullOrWhiteSpace($WS_TOKEN_PLAIN)) {
         Write-Host "[vgc-agent-kit] WARNING: Token workspace trong. Bo qua workspace setup."
@@ -159,6 +164,24 @@ if (-not $SKIP_WORKSPACE) {
             }
         }
     }
+}
+
+# Step 6d: Store mobile repo token for gh api access (optional)
+Write-Host ""
+Write-Host "Can GitHub Token thu 2 (PAT) voi quyen repo:read cho mobile repo."
+Write-Host "Token nay dung de agent doc screen-index.json va source code."
+Write-Host "(Bo qua neu khong can discover-screen skill)"
+Write-Host ""
+$MOBILE_TOKEN = Read-Host "Nhap GitHub token (mobile, Enter de bo qua)" -AsSecureString
+$BSTR_M = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($MOBILE_TOKEN)
+$MOBILE_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_M)
+[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_M)
+
+if (-not [string]::IsNullOrWhiteSpace($MOBILE_PLAIN)) {
+    & git config --global credential.helper store
+    $mobileCred = "protocol=https`nhost=github.com`nusername=${MOBILE_PLAIN}`npassword=${MOBILE_PLAIN}`n"
+    $mobileCred | & git credential approve 2>$null
+    Write-Host "[vgc-agent-kit] Mobile repo token da luu."
 }
 
 # Step 7: Symlink skills to ~/.claude/skills/ (Junction, no admin needed)
