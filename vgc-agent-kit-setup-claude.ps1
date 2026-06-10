@@ -1,10 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $VGC_DIR = "$env:USERPROFILE\.vgc-agent-kit"
-$CLAUDE_DIR = "$env:USERPROFILE\.claude"
-$PLUGINS_FILE = "$CLAUDE_DIR\plugins\installed_plugins.json"
-$SETTINGS_FILE = "$CLAUDE_DIR\settings.json"
-$PLUGIN_KEY = "vgc-agent-kit@local"
+$CLAUDE_SKILLS_DIR = "$env:USERPROFILE\.claude\skills"
 
 Write-Host "======================================"
 Write-Host "  VGC Agent Kit - Setup (Claude Code)"
@@ -24,15 +21,15 @@ try {
 }
 
 # Step 2: Check Claude Code installed
-if (-not (Test-Path $CLAUDE_DIR)) {
-    Write-Host "[vgc-agent-kit] ERROR: Thu muc $CLAUDE_DIR khong ton tai."
+if (-not (Test-Path "$env:USERPROFILE\.claude")) {
+    Write-Host "[vgc-agent-kit] ERROR: Thu muc ~/.claude khong ton tai."
     Write-Host "[vgc-agent-kit] Vui long cai Claude Code truoc: https://claude.ai/download"
     exit 1
 }
 
 Write-Host "[vgc-agent-kit] Claude Code OK."
 
-# Step 3: Check existing installation — reuse if already cloned (e.g. by Codex setup)
+# Step 3: Check existing installation — reuse if already cloned
 $SKIP_CLONE = $false
 if (Test-Path $VGC_DIR) {
     if (Test-Path "$VGC_DIR\.git") {
@@ -77,76 +74,32 @@ if (-not $SKIP_CLONE) {
 
     Write-Host "[vgc-agent-kit] Clone thanh cong."
 
-    # Step 6: Store credentials for future pulls
+    # Step 6: Store credentials
     & git -C $VGC_DIR config credential.helper store
     $credentialInput = "protocol=https`nhost=github.com`nusername=${TOKEN_PLAIN}`npassword=${TOKEN_PLAIN}`n"
     $credentialInput | & git -C $VGC_DIR credential approve 2>$null
 }
 
-# Step 7: Register as Claude Code plugin
-$pluginsDir = "$CLAUDE_DIR\plugins"
-if (-not (Test-Path $pluginsDir)) {
-    New-Item -ItemType Directory -Path $pluginsDir -Force | Out-Null
+# Step 7: Symlink skills to ~/.claude/skills/ (Junction, no admin needed)
+if (-not (Test-Path $CLAUDE_SKILLS_DIR)) {
+    New-Item -ItemType Directory -Path $CLAUDE_SKILLS_DIR -Force | Out-Null
 }
 
-# 7a: Update installed_plugins.json
-if (-not (Test-Path $PLUGINS_FILE)) {
-    '{"version":2,"plugins":{}}' | Set-Content -Path $PLUGINS_FILE -Encoding UTF8
-}
+Get-ChildItem -Path "$VGC_DIR\skills" -Directory | ForEach-Object {
+    $skillName = $_.Name
+    $skillPath = $_.FullName
+    $linkPath = Join-Path $CLAUDE_SKILLS_DIR $skillName
 
-$installDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+    if (-not (Test-Path "$skillPath\SKILL.md")) { return }
 
-try {
-    $pluginsData = Get-Content $PLUGINS_FILE -Raw | ConvertFrom-Json
+    if (Test-Path $linkPath) { Remove-Item $linkPath -Force -Recurse }
 
-    if (-not $pluginsData.plugins) {
-        $pluginsData | Add-Member -NotePropertyName "plugins" -NotePropertyValue @{} -Force
+    try {
+        New-Item -ItemType Junction -Path $linkPath -Target $skillPath -Force | Out-Null
+    } catch {
+        New-Item -ItemType SymbolicLink -Path $linkPath -Target $skillPath -Force | Out-Null
     }
-
-    $entry = @{
-        scope = "user"
-        installPath = $VGC_DIR
-        version = "1.0.0"
-        installedAt = $installDate
-        lastUpdated = $installDate
-    }
-
-    if ($pluginsData.plugins.PSObject.Properties[$PLUGIN_KEY]) {
-        $pluginsData.plugins.$PLUGIN_KEY = @($entry)
-    } else {
-        $pluginsData.plugins | Add-Member -NotePropertyName $PLUGIN_KEY -NotePropertyValue @($entry)
-    }
-
-    $pluginsData | ConvertTo-Json -Depth 10 | Set-Content -Path $PLUGINS_FILE -Encoding UTF8
-    Write-Host "[vgc-agent-kit] Plugin dang ky vao installed_plugins.json."
-} catch {
-    Write-Host "[vgc-agent-kit] WARNING: Khong the dang ky plugin tu dong."
-    Write-Host "[vgc-agent-kit] Chay Claude Code voi: claude --plugin-dir $VGC_DIR"
-}
-
-# 7b: Enable plugin in settings.json
-if (-not (Test-Path $SETTINGS_FILE)) {
-    '{}' | Set-Content -Path $SETTINGS_FILE -Encoding UTF8
-}
-
-try {
-    $settingsData = Get-Content $SETTINGS_FILE -Raw | ConvertFrom-Json
-
-    if (-not $settingsData.enabledPlugins) {
-        $settingsData | Add-Member -NotePropertyName "enabledPlugins" -NotePropertyValue @{} -Force
-    }
-
-    if ($settingsData.enabledPlugins.PSObject.Properties[$PLUGIN_KEY]) {
-        $settingsData.enabledPlugins.$PLUGIN_KEY = $true
-    } else {
-        $settingsData.enabledPlugins | Add-Member -NotePropertyName $PLUGIN_KEY -NotePropertyValue $true
-    }
-
-    $settingsData | ConvertTo-Json -Depth 10 | Set-Content -Path $SETTINGS_FILE -Encoding UTF8
-    Write-Host "[vgc-agent-kit] Plugin da bat trong settings.json."
-} catch {
-    Write-Host "[vgc-agent-kit] WARNING: Khong the bat plugin trong settings."
-    Write-Host "[vgc-agent-kit] Bat thu cong trong Claude Code: /plugins"
+    Write-Host "[vgc-agent-kit] Linked skill: $skillName"
 }
 
 # Step 8: Install scheduled task (best-effort)
@@ -195,7 +148,7 @@ Write-Host "======================================"
 Write-Host "  Setup hoan tat!"
 Write-Host "======================================"
 Write-Host ""
-Write-Host "  Plugin:        $PLUGIN_KEY"
+Write-Host "  Skills location: $CLAUDE_SKILLS_DIR"
 Write-Host "  Repo location: $VGC_DIR"
 Write-Host "  Auto-update:   Daily luc 9h sang"
 Write-Host "  Manual update: vgc-agent-kit-update-claude"
