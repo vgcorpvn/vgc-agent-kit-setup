@@ -28,6 +28,12 @@ $SKIP_CLONE = $false
 if (Test-Path $VGC_DIR) {
     if (Test-Path "$VGC_DIR\.git") {
         Write-Host "[vgc-agent-kit] Repo da ton tai tai $VGC_DIR — dung lai (skip clone)."
+        # Sanitize: strip any token from remote URL (fix from earlier installs)
+        $currentUrl = & git -C $VGC_DIR remote get-url origin 2>$null
+        if ($currentUrl -match "@github\.com" -and $currentUrl -notmatch "^git@") {
+            & git -C $VGC_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
+            Write-Host "[vgc-agent-kit] Da xoa token khoi remote URL."
+        }
         & git -C $VGC_DIR pull --ff-only 2>$null
         $SKIP_CLONE = $true
     } else {
@@ -69,7 +75,8 @@ if (-not $SKIP_CLONE) {
 
     Write-Host "[vgc-agent-kit] Clone thanh cong."
 
-    # Step 5: Store credentials for future pulls
+    # Step 5: Strip token from remote URL + store credentials for future pulls
+    & git -C $VGC_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
     & git -C $VGC_DIR config credential.helper store
     $credentialInput = "protocol=https`nhost=github.com`nusername=${TOKEN_PLAIN}`npassword=${TOKEN_PLAIN}`n"
     $credentialInput | & git -C $VGC_DIR credential approve 2>$null
@@ -102,6 +109,12 @@ $SKIP_WORKSPACE = $false
 if (Test-Path $WORKSPACE_DIR) {
     if (Test-Path "$WORKSPACE_DIR\.git") {
         Write-Host "[vgc-agent-kit] Workspace repo da ton tai — dung lai."
+        # Sanitize: strip any token from remote URL
+        $wsUrl = & git -C $WORKSPACE_DIR remote get-url origin 2>$null
+        if ($wsUrl -match "@github\.com" -and $wsUrl -notmatch "^git@") {
+            & git -C $WORKSPACE_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
+            Write-Host "[vgc-agent-kit] Da xoa token khoi workspace remote URL."
+        }
         & git -C $WORKSPACE_DIR pull --ff-only 2>$null
         $SKIP_WORKSPACE = $true
     } else {
@@ -141,7 +154,8 @@ if (-not $SKIP_WORKSPACE) {
         } else {
             Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
 
-            # Store workspace credentials
+            # Strip token from remote URL + store credentials
+            & git -C $WORKSPACE_DIR remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
             & git -C $WORKSPACE_DIR config credential.helper store
             $wsCred = "protocol=https`nhost=github.com`nusername=${WS_TOKEN_PLAIN}`npassword=${WS_TOKEN_PLAIN}`n"
             $wsCred | & git -C $WORKSPACE_DIR credential approve 2>$null

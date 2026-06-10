@@ -45,6 +45,12 @@ SKIP_CLONE=false
 if [ -d "$VGC_DIR" ]; then
     if [ -d "$VGC_DIR/.git" ]; then
         echo "[vgc-agent-kit] Repo đã tồn tại tại $VGC_DIR — dùng lại (skip clone)."
+        # Sanitize: strip any token from remote URL (fix from earlier installs)
+        CURRENT_URL="$(git -C "$VGC_DIR" remote get-url origin 2>/dev/null || true)"
+        if [[ "$CURRENT_URL" == *@github.com* && "$CURRENT_URL" != "git@"* ]]; then
+            git -C "$VGC_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
+            echo "[vgc-agent-kit] Đã xoá token khỏi remote URL."
+        fi
         git -C "$VGC_DIR" pull --ff-only 2>/dev/null || true
         SKIP_CLONE=true
     else
@@ -83,9 +89,11 @@ if [ "$SKIP_CLONE" = false ]; then
 
     echo "[vgc-agent-kit] Clone thành công."
 
-    # Step 6: Store credentials for future pulls
+    # Step 6: Strip token from remote URL + store credentials for future pulls
+    git -C "$VGC_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-kit.git"
     git -C "$VGC_DIR" config credential.helper store
-    echo "https://${GITHUB_TOKEN}@github.com" \
+    printf 'protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n' \
+        "$GITHUB_TOKEN" "$GITHUB_TOKEN" \
         | git -C "$VGC_DIR" credential approve 2>/dev/null || true
 fi
 
@@ -128,6 +136,12 @@ SKIP_WORKSPACE=false
 if [ -d "$WORKSPACE_DIR" ]; then
     if [ -d "$WORKSPACE_DIR/.git" ]; then
         echo "[vgc-agent-kit] Workspace repo đã tồn tại — dùng lại."
+        # Sanitize: strip any token from remote URL
+        WS_URL="$(git -C "$WORKSPACE_DIR" remote get-url origin 2>/dev/null || true)"
+        if [[ "$WS_URL" == *@github.com* && "$WS_URL" != "git@"* ]]; then
+            git -C "$WORKSPACE_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
+            echo "[vgc-agent-kit] Đã xoá token khỏi workspace remote URL."
+        fi
         git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || true
         SKIP_WORKSPACE=true
     else
@@ -166,9 +180,11 @@ if [ "$SKIP_WORKSPACE" = false ]; then
         if [ -d "$WORKSPACE_DIR/.git" ]; then
             echo "[vgc-agent-kit] Workspace clone thành công."
 
-            # Store workspace credentials
+            # Strip token from remote URL + store credentials
+            git -C "$WORKSPACE_DIR" remote set-url origin "https://github.com/vgcorpvn/vgc-agent-workspace.git"
             git -C "$WORKSPACE_DIR" config credential.helper store
-            echo "https://${WORKSPACE_TOKEN}@github.com" \
+            printf 'protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n' \
+                "$WORKSPACE_TOKEN" "$WORKSPACE_TOKEN" \
                 | git -C "$WORKSPACE_DIR" credential approve 2>/dev/null || true
 
             # Auth gh CLI with workspace token
@@ -193,7 +209,8 @@ echo ""
 
 if [ -n "$MOBILE_TOKEN" ]; then
     git config --global credential.helper store
-    echo "https://${MOBILE_TOKEN}@github.com" \
+    printf 'protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n' \
+        "$MOBILE_TOKEN" "$MOBILE_TOKEN" \
         | git credential approve 2>/dev/null || true
     echo "[vgc-agent-kit] Mobile repo token đã lưu."
 fi
