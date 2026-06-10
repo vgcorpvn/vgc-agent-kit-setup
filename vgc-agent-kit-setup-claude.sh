@@ -99,10 +99,10 @@ for skill_dir in "$VGC_DIR"/skills/*/; do
 done
 
 # Step 8: Install cronjob (best-effort — không kill script nếu fail)
+CRON_CMD="$VGC_DIR/scripts/vgc-agent-kit-update-claude.sh"
+CRON_ENTRY="0 9 * * * $CRON_CMD >/dev/null 2>&1"
 if EXISTING_CRON="$(crontab -l 2>/dev/null || true)" && \
    FILTERED_CRON="$(echo "$EXISTING_CRON" | grep -v "vgc-agent-kit-update-claude" || true)" && \
-   CRON_CMD="cd $VGC_DIR && git pull --ff-only" && \
-   CRON_ENTRY="0 9 * * * $CRON_CMD >/dev/null 2>&1" && \
    (echo "$FILTERED_CRON"; echo "$CRON_ENTRY") | crontab -; then
     echo "[vgc-agent-kit] Cronjob cài đặt: chạy mỗi ngày lúc 9h sáng."
 else
@@ -115,7 +115,7 @@ if [ -f "$HOME/.bashrc" ] && [ ! -f "$HOME/.zshrc" ]; then
     SHELL_RC="$HOME/.bashrc"
 fi
 
-ALIAS_LINE="alias vgc-agent-kit-update-claude=\"cd $VGC_DIR && git pull --ff-only\""
+ALIAS_LINE="alias vgc-agent-kit-update-claude=\"$VGC_DIR/scripts/vgc-agent-kit-update-claude.sh\""
 
 if ! grep -q "vgc-agent-kit-update-claude" "$SHELL_RC" 2>/dev/null; then
     {
