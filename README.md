@@ -5,20 +5,20 @@ Setup scripts cho VGC Agent Kit — bộ skills và knowledge dùng chung cho te
 ## Yêu cầu
 
 - **Claude Code** hoặc **Codex CLI** đã cài đặt
-- **Token A** — GitHub PAT (classic) với quyền `repo`, `read:org`
+- **GitHub PAT** — PAT (classic) với quyền `repo`, `read:org`
   - Truy cập `vgcorpvn/vgc-agent-kit` (read+write)
   - Truy cập `vgcorpvn/vgc-agent-workspace` (read+write)
-- **Token B** (optional) — GitHub PAT với quyền `repo:read`
+- **Mobile token** (optional) — GitHub PAT với quyền `repo:read`
   - Truy cập `vgcorpvn/mobile.vhandicap.com` (read-only)
   - Cần cho skill `/discover-screen`
 
-> **2 token riêng biệt** theo nguyên tắc least privilege. Token A dùng cho `gh` CLI (API, PR) + `git` (qua `gh auth setup-git`). Token B lưu tại `~/.vgc/config/mobile-token`, skills dùng qua `GH_TOKEN=... gh api`.
+> **2 token riêng biệt** theo nguyên tắc least privilege. GitHub PAT dùng cho `gh` CLI (API, PR) + `git` (qua `gh auth setup-git`). Mobile token lưu tại `~/.vgc/config/mobile-token`, skills dùng qua `GH_TOKEN=... gh api`.
 
 ## Tạo token
 
 1. Vào https://github.com/settings/tokens → **Generate new token (classic)**
-2. **Token A**: scopes `repo`, `read:org` — cho kit + workspace
-3. **Token B**: scope `repo` (hoặc fine-grained với read-only) — cho mobile repo
+2. **GitHub PAT**: scopes `repo`, `read:org` — cho kit + workspace
+3. **Mobile token**: scope `repo` (hoặc fine-grained với read-only) — cho mobile repo
 4. Đảm bảo account đã được mời vào org `vgcorpvn`
 
 ## Cài đặt cho Claude Code
@@ -56,11 +56,11 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 ## Setup làm gì
 
 1. Kiểm tra git + gh CLI (tự cài gh nếu chưa có)
-2. **Token A** → `gh auth login` → verify quyền truy cập kit + workspace
+2. **GitHub PAT** → `gh auth login` → verify quyền truy cập kit + workspace
 3. **`gh auth setup-git`** → đồng bộ credentials giữa git và gh (URL sạch, không nhúng token)
 4. Clone `vgc-agent-kit` → `~/.vgc/agent-kit/`
 5. Clone `vgc-agent-workspace` → `~/.vgc/agent-workspace/`
-6. **Token B** (optional) → verify mobile repo access → lưu `~/.vgc/config/mobile-token`
+6. **Mobile token** (optional) → verify mobile repo access → lưu `~/.vgc/config/mobile-token`
 7. Symlink skills vào agent skills directory
 8. Thêm update alias
 
@@ -79,10 +79,10 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 | Vấn đề | Giải pháp |
 |--------|-----------|
 | "Git chưa được cài đặt" | Mac: cài Xcode Command Line Tools. Windows: tải Git for Windows |
-| "gh auth login thất bại" | Token A không hợp lệ hoặc hết hạn. Tạo token mới |
-| "Token A không đủ quyền" | Kiểm tra token có scope `repo` và account đã vào org `vgcorpvn` |
+| "gh auth login thất bại" | GitHub PAT không hợp lệ hoặc hết hạn. Tạo token mới |
+| "GitHub PAT không đủ quyền" | Kiểm tra token có scope `repo` và account đã vào org `vgcorpvn` |
 | `gh api` báo 401 nhưng `git pull` OK | Chạy lại setup — sẽ re-auth gh CLI và chạy `gh auth setup-git` |
-| `/discover-screen` không hoạt động | Chạy lại setup và nhập Token B cho mobile repo |
+| `/discover-screen` không hoạt động | Chạy lại setup và nhập mobile token cho mobile repo |
 | Skills không hiện | Chạy update command rồi restart Claude/Codex |
 | Windows: "cannot create symbolic link" | Script đã dùng Junction — nếu vẫn lỗi, bật Developer Mode |
 | gh CLI không cài được | Cài thủ công: https://cli.github.com/ |

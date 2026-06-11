@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-trap 'echo "[vgc-agent-kit] ERROR: Script thất bại tại dòng $LINENO (exit code $?)" >&2' ERR
+trap 'echo "[vgc-agent-kit] ERROR: Script failed at line $LINENO (exit code $?)" >&2' ERR
 
 VGC_ROOT="$HOME/.vgc"
 VGC_DIR="$VGC_ROOT/agent-kit"
@@ -22,16 +22,16 @@ echo ""
 # Step 1: Check git
 # ──────────────────────────────────────────
 if ! command -v git &>/dev/null; then
-    echo "[vgc-agent-kit] Git chưa được cài đặt."
+    echo "[vgc-agent-kit] Git is not installed."
     if [[ "$(uname)" == "Darwin" ]]; then
-        echo "[vgc-agent-kit] Đang cài Git qua Xcode Command Line Tools..."
+        echo "[vgc-agent-kit] Installing Git via Xcode Command Line Tools..."
         xcode-select --install 2>/dev/null || true
         echo ""
-        echo "Vui lòng hoàn tất cài đặt Xcode Command Line Tools trong popup,"
-        echo "sau đó chạy lại script này."
+        echo "Please complete the Xcode Command Line Tools installation in the popup,"
+        echo "then re-run this script."
         exit 1
     else
-        echo "[vgc-agent-kit] Vui lòng cài Git:"
+        echo "[vgc-agent-kit] Please install Git:"
         echo "  Ubuntu/Debian: sudo apt install git"
         echo "  Fedora:        sudo dnf install git"
         exit 1
@@ -44,15 +44,15 @@ echo "[vgc-agent-kit] Git OK: $(git --version)"
 # Step 2: Check/install gh CLI
 # ──────────────────────────────────────────
 if ! command -v gh &>/dev/null; then
-    echo "[vgc-agent-kit] GitHub CLI (gh) chưa cài. Đang cài..."
+    echo "[vgc-agent-kit] GitHub CLI (gh) not found. Installing..."
     if [[ "$(uname)" == "Darwin" ]]; then
         if command -v brew &>/dev/null; then
             brew install gh 2>/dev/null || {
-                echo "[vgc-agent-kit] WARNING: Không thể cài gh qua brew."
-                echo "[vgc-agent-kit] Cài thủ công: https://cli.github.com/"
+                echo "[vgc-agent-kit] WARNING: Failed to install gh via brew."
+                echo "[vgc-agent-kit] Install manually: https://cli.github.com/"
             }
         else
-            echo "[vgc-agent-kit] WARNING: Homebrew chưa cài. Cài gh thủ công:"
+            echo "[vgc-agent-kit] WARNING: Homebrew not installed. Install gh manually:"
             echo "  https://cli.github.com/"
         fi
     else
@@ -64,7 +64,7 @@ if ! command -v gh &>/dev/null; then
             echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
             sudo apt-get update && sudo apt-get install gh -y
         else
-            echo "[vgc-agent-kit] WARNING: Không thể tự cài gh. Cài thủ công:"
+            echo "[vgc-agent-kit] WARNING: Could not install gh automatically. Install manually:"
             echo "  https://cli.github.com/"
         fi
     fi
@@ -73,18 +73,18 @@ fi
 if command -v gh &>/dev/null; then
     echo "[vgc-agent-kit] gh CLI OK: $(gh --version | head -1)"
 else
-    echo "[vgc-agent-kit] WARNING: gh CLI không có. Một số skill sẽ không hoạt động."
+    echo "[vgc-agent-kit] WARNING: gh CLI not available. Some skills will not work."
 fi
 
 # ──────────────────────────────────────────
-# Step 3: Token A — kit + workspace (read+write)
+# Step 3: Authenticate gh CLI — kit + workspace (read+write)
 # ──────────────────────────────────────────
-NEED_TOKEN_A=true
+NEED_MAIN_TOKEN=true
 
 if command -v gh &>/dev/null; then
     if gh auth status -h github.com &>/dev/null; then
         echo ""
-        echo "[vgc-agent-kit] gh CLI đã authenticated."
+        echo "[vgc-agent-kit] gh CLI already authenticated."
 
         REPOS_OK=true
         if ! gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' &>/dev/null; then
@@ -95,41 +95,41 @@ if command -v gh &>/dev/null; then
         fi
 
         if [ "$REPOS_OK" = true ]; then
-            echo "[vgc-agent-kit] Token A truy cập OK — dùng lại."
-            NEED_TOKEN_A=false
+            echo "[vgc-agent-kit] Token access OK — reusing."
+            NEED_MAIN_TOKEN=false
         else
-            echo "[vgc-agent-kit] Token A thiếu quyền — cần nhập token mới."
+            echo "[vgc-agent-kit] Token lacks required permissions — need a new token."
         fi
     fi
 fi
 
-if [ "$NEED_TOKEN_A" = true ]; then
+if [ "$NEED_MAIN_TOKEN" = true ]; then
     echo ""
-    echo "┌─────────────────────────────────────────────────────────┐"
-    echo "│  Token A — cho kit + workspace (read+write)             │"
-    echo "│                                                         │"
-    echo "│  Quyền tối thiểu: repo, read:org                       │"
-    echo "│  Token cần truy cập được:                               │"
-    echo "│    • vgcorpvn/vgc-agent-kit        (read+write)         │"
-    echo "│    • vgcorpvn/vgc-agent-workspace   (read+write)        │"
-    echo "│                                                         │"
-    echo "│  Tạo tại: https://github.com/settings/tokens            │"
-    echo "└─────────────────────────────────────────────────────────┘"
+    echo "┌──────────────────────────────────────────────────────────┐"
+    echo "│  GitHub PAT — for kit + workspace repos (read+write)   │"
+    echo "│                                                        │"
+    echo "│  Minimum scopes: repo, read:org                        │"
+    echo "│  Token must have access to:                            │"
+    echo "│    • vgcorpvn/vgc-agent-kit       (read+write)         │"
+    echo "│    • vgcorpvn/vgc-agent-workspace (read+write)         │"
+    echo "│                                                        │"
+    echo "│  Create at: https://github.com/settings/tokens         │"
+    echo "└──────────────────────────────────────────────────────────┘"
     echo ""
-    read -rsp "Nhập Token A: " TOKEN_A
+    read -rsp "Enter GitHub PAT: " MAIN_TOKEN
     echo ""
 
-    if [ -z "$TOKEN_A" ]; then
-        echo "[vgc-agent-kit] ERROR: Token không được để trống."
+    if [ -z "$MAIN_TOKEN" ]; then
+        echo "[vgc-agent-kit] ERROR: Token cannot be empty."
         exit 1
     fi
 
     if command -v gh &>/dev/null; then
-        echo "[vgc-agent-kit] Đang xác thực gh CLI với Token A..."
-        if echo "$TOKEN_A" | gh auth login -h github.com --with-token 2>/dev/null; then
+        echo "[vgc-agent-kit] Authenticating gh CLI..."
+        if echo "$MAIN_TOKEN" | gh auth login -h github.com --with-token 2>/dev/null; then
             echo "[vgc-agent-kit] gh auth OK."
         else
-            echo "[vgc-agent-kit] ERROR: gh auth login thất bại."
+            echo "[vgc-agent-kit] ERROR: gh auth login failed."
             exit 1
         fi
     fi
@@ -139,35 +139,35 @@ fi
 # Step 4: Setup gh as git credential helper
 # ──────────────────────────────────────────
 if command -v gh &>/dev/null; then
-    echo "[vgc-agent-kit] Đồng bộ credentials: gh → git..."
+    echo "[vgc-agent-kit] Syncing credentials: gh → git..."
     gh auth setup-git -h github.com 2>/dev/null || true
     echo "[vgc-agent-kit] git credential helper = gh CLI."
 fi
 
 # ──────────────────────────────────────────
-# Step 5: Verify Token A repo access
+# Step 5: Verify repo access
 # ──────────────────────────────────────────
 echo ""
-echo "[vgc-agent-kit] Kiểm tra Token A..."
+echo "[vgc-agent-kit] Verifying repo access..."
 
 VERIFY_OK=true
 if command -v gh &>/dev/null; then
     if gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' &>/dev/null; then
         echo "  ✓ Agent Kit (vgcorpvn/vgc-agent-kit)"
     else
-        echo "  ✗ Agent Kit — KHÔNG truy cập được"
+        echo "  ✗ Agent Kit — access denied"
         VERIFY_OK=false
     fi
     if gh api repos/vgcorpvn/vgc-agent-workspace --jq '.name' &>/dev/null; then
         echo "  ✓ Workspace (vgcorpvn/vgc-agent-workspace)"
     else
-        echo "  ✗ Workspace — KHÔNG truy cập được"
+        echo "  ✗ Workspace — access denied"
         VERIFY_OK=false
     fi
 fi
 
 if [ "$VERIFY_OK" = false ]; then
-    echo "[vgc-agent-kit] ERROR: Token A không đủ quyền."
+    echo "[vgc-agent-kit] ERROR: Token lacks required permissions."
     exit 1
 fi
 
@@ -179,22 +179,22 @@ echo ""
 REPO_URL="https://github.com/vgcorpvn/vgc-agent-kit.git"
 
 if [ -d "$VGC_DIR/.git" ]; then
-    echo "[vgc-agent-kit] Repo đã tồn tại — pulling latest..."
+    echo "[vgc-agent-kit] Repo already exists — pulling latest..."
     git -C "$VGC_DIR" checkout main 2>/dev/null || true
-    git -C "$VGC_DIR" pull --ff-only origin main || echo "[vgc-agent-kit] WARNING: Pull thất bại."
+    git -C "$VGC_DIR" pull --ff-only origin main || echo "[vgc-agent-kit] WARNING: Pull failed."
 elif [ -d "$VGC_DIR" ]; then
-    echo "[vgc-agent-kit] Thư mục $VGC_DIR tồn tại nhưng không phải git repo."
-    read -rp "Ghi đè? (y/N): " overwrite
+    echo "[vgc-agent-kit] Directory $VGC_DIR exists but is not a git repo."
+    read -rp "Overwrite? (y/N): " overwrite
     if [[ "$overwrite" != "y" && "$overwrite" != "Y" ]]; then
-        echo "[vgc-agent-kit] Huỷ bỏ."
+        echo "[vgc-agent-kit] Aborted."
         exit 0
     fi
     rm -rf "$VGC_DIR"
     git clone --quiet "$REPO_URL" "$VGC_DIR"
-    echo "[vgc-agent-kit] Clone thành công."
+    echo "[vgc-agent-kit] Cloned successfully."
 else
     git clone --quiet "$REPO_URL" "$VGC_DIR"
-    echo "[vgc-agent-kit] Clone thành công."
+    echo "[vgc-agent-kit] Cloned successfully."
 fi
 
 # ──────────────────────────────────────────
@@ -203,29 +203,29 @@ fi
 WORKSPACE_URL="https://github.com/vgcorpvn/vgc-agent-workspace.git"
 
 if [ -d "$WORKSPACE_DIR/.git" ]; then
-    echo "[vgc-agent-kit] Workspace đã tồn tại — pulling latest..."
+    echo "[vgc-agent-kit] Workspace already exists — pulling latest..."
     git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || echo "[vgc-agent-kit] Workspace pull skipped."
 elif [ -d "$WORKSPACE_DIR" ]; then
-    read -rp "Workspace tồn tại nhưng không phải git repo. Ghi đè? (y/N): " overwrite_ws
+    read -rp "Workspace exists but is not a git repo. Overwrite? (y/N): " overwrite_ws
     if [[ "$overwrite_ws" != "y" && "$overwrite_ws" != "Y" ]]; then
-        echo "[vgc-agent-kit] Bỏ qua workspace setup."
+        echo "[vgc-agent-kit] Skipping workspace setup."
     else
         rm -rf "$WORKSPACE_DIR"
         git clone --quiet "$WORKSPACE_URL" "$WORKSPACE_DIR"
-        echo "[vgc-agent-kit] Workspace clone thành công."
+        echo "[vgc-agent-kit] Workspace cloned successfully."
     fi
 else
     git clone --quiet "$WORKSPACE_URL" "$WORKSPACE_DIR"
-    echo "[vgc-agent-kit] Workspace clone thành công."
+    echo "[vgc-agent-kit] Workspace cloned successfully."
 fi
 
 # ──────────────────────────────────────────
-# Step 8: Token B — mobile repo (read-only, optional)
+# Step 8: Mobile token (optional) — mobile repo (read-only, optional)
 # ──────────────────────────────────────────
 SKIP_MOBILE=false
 
 if command -v gh &>/dev/null && gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
-    echo "[vgc-agent-kit] Token A đã truy cập được mobile repo — bỏ qua Token B."
+    echo "[vgc-agent-kit] Token already has mobile repo access — no separate token needed."
     mkdir -p "$CONFIG_DIR"
     gh auth token -h github.com 2>/dev/null > "$MOBILE_TOKEN_FILE" || true
     chmod 600 "$MOBILE_TOKEN_FILE" 2>/dev/null || true
@@ -235,34 +235,34 @@ fi
 if [ "$SKIP_MOBILE" = false ] && [ -f "$MOBILE_TOKEN_FILE" ]; then
     EXISTING=$(cat "$MOBILE_TOKEN_FILE" 2>/dev/null || echo "")
     if [ -n "$EXISTING" ] && GH_TOKEN="$EXISTING" gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
-        echo "[vgc-agent-kit] Token B (mobile) còn hợp lệ — dùng lại."
+        echo "[vgc-agent-kit] Existing mobile token is valid — reusing."
         SKIP_MOBILE=true
     fi
 fi
 
 if [ "$SKIP_MOBILE" = false ]; then
     echo ""
-    echo "┌─────────────────────────────────────────────────────────┐"
-    echo "│  Token B — cho mobile repo (read-only, optional)        │"
-    echo "│                                                         │"
-    echo "│  Quyền: repo:read cho vgcorpvn/mobile.vhandicap.com    │"
-    echo "│  Enter để bỏ qua                                       │"
-    echo "└─────────────────────────────────────────────────────────┘"
+    echo "┌──────────────────────────────────────────────────────────┐"
+    echo "│  Mobile token — for mobile repo (read-only, optional)  │"
+    echo "│                                                        │"
+    echo "│  Scope: repo:read for vgcorpvn/mobile.vhandicap.com   │"
+    echo "│  Press Enter to skip if not needed                     │"
+    echo "└──────────────────────────────────────────────────────────┘"
     echo ""
-    read -rsp "Nhập Token B (Enter để bỏ qua): " TOKEN_B
+    read -rsp "Enter mobile token (Enter to skip): " MOBILE_PAT
     echo ""
 
-    if [ -n "$TOKEN_B" ]; then
-        if GH_TOKEN="$TOKEN_B" gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
+    if [ -n "$MOBILE_PAT" ]; then
+        if GH_TOKEN="$MOBILE_PAT" gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
             mkdir -p "$CONFIG_DIR"
-            echo "$TOKEN_B" > "$MOBILE_TOKEN_FILE"
+            echo "$MOBILE_PAT" > "$MOBILE_TOKEN_FILE"
             chmod 600 "$MOBILE_TOKEN_FILE"
-            echo "[vgc-agent-kit] ✓ Token B OK — mobile repo truy cập được."
+            echo "[vgc-agent-kit] ✓ Mobile token OK."
         else
-            echo "[vgc-agent-kit] WARNING: Token B không truy cập được mobile repo."
+            echo "[vgc-agent-kit] WARNING: Mobile token is invalid."
         fi
     else
-        echo "[vgc-agent-kit] Bỏ qua Token B."
+        echo "[vgc-agent-kit] Skipped mobile token."
     fi
 fi
 
@@ -315,18 +315,18 @@ eval "$ALIAS_LINE" 2>/dev/null || true
 
 echo ""
 echo "======================================"
-echo "  Setup hoàn tất!"
+echo "  Setup complete!"
 echo "======================================"
 echo ""
 echo "  Skills location: $SKILLS_DIR"
 echo "  Repo location:   $VGC_DIR"
 echo "  Workspace:       $WORKSPACE_DIR"
 echo "  Auth:"
-echo "    Token A: gh CLI (kit + workspace)"
+echo "    gh CLI:        authenticated (kit + workspace)"
 if [ -f "$MOBILE_TOKEN_FILE" ]; then
-echo "    Token B: $MOBILE_TOKEN_FILE (mobile, read-only)"
+echo "    Mobile token:  $MOBILE_TOKEN_FILE"
 else
-echo "    Token B: không có"
+echo "    Mobile token:  not configured"
 fi
 echo "  Manual update:   vgc-agent-kit-update-codex"
 echo ""
