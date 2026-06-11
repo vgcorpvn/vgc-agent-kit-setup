@@ -9,25 +9,7 @@ $MOBILE_TOKEN_FILE = "$CONFIG_DIR\mobile-token"
 
 $env:GIT_TERMINAL_PROMPT = "0"
 
-# ──────────────────────────────────────────
-# Migration: move old paths into ~/.vgc/
-# ──────────────────────────────────────────
 if (-not (Test-Path $VGC_ROOT)) { New-Item -ItemType Directory -Path $VGC_ROOT -Force | Out-Null }
-
-if ((Test-Path "$env:USERPROFILE\.vgc-agent-kit") -and (-not (Test-Path $VGC_DIR))) {
-    Move-Item "$env:USERPROFILE\.vgc-agent-kit" $VGC_DIR
-    Write-Host "[vgc-agent-kit] Migrated ~/.vgc-agent-kit -> ~/.vgc/agent-kit"
-}
-
-if ((Test-Path "$env:USERPROFILE\.vgc-agent-workspace") -and (-not (Test-Path $WORKSPACE_DIR))) {
-    Move-Item "$env:USERPROFILE\.vgc-agent-workspace" $WORKSPACE_DIR
-    Write-Host "[vgc-agent-kit] Migrated ~/.vgc-agent-workspace -> ~/.vgc/agent-workspace"
-}
-
-if ((Test-Path "$env:USERPROFILE\.config\vgc-agent-kit") -and (-not (Test-Path $CONFIG_DIR))) {
-    Move-Item "$env:USERPROFILE\.config\vgc-agent-kit" $CONFIG_DIR
-    Write-Host "[vgc-agent-kit] Migrated ~/.config/vgc-agent-kit -> ~/.vgc/config"
-}
 
 Write-Host "======================================"
 Write-Host "  VGC Agent Kit - Setup (Codex CLI)"
@@ -166,38 +148,30 @@ Write-Host ""
 # ──────────────────────────────────────────
 # Step 6: Clone/update vgc-agent-kit
 # ──────────────────────────────────────────
-$CLEAN_URL = "https://github.com/vgcorpvn/vgc-agent-kit.git"
+$REPO_URL = "https://github.com/vgcorpvn/vgc-agent-kit.git"
 
 if (Test-Path "$VGC_DIR\.git") {
     Write-Host "[vgc-agent-kit] Repo da ton tai — pulling latest..."
-    $currentUrl = & git -C $VGC_DIR remote get-url origin 2>$null
-    if ($currentUrl -ne $CLEAN_URL) {
-        & git -C $VGC_DIR remote set-url origin $CLEAN_URL
-    }
     & git -C $VGC_DIR checkout main 2>$null
     & git -C $VGC_DIR pull --ff-only origin main 2>$null
 } elseif (Test-Path $VGC_DIR) {
     $overwrite = Read-Host "Thu muc $VGC_DIR ton tai nhung khong phai git repo. Ghi de? (y/N)"
     if ($overwrite -ne "y" -and $overwrite -ne "Y") { exit 0 }
     Remove-Item -Recurse -Force $VGC_DIR
-    & git clone --quiet $CLEAN_URL $VGC_DIR
+    & git clone --quiet $REPO_URL $VGC_DIR
     Write-Host "[vgc-agent-kit] Clone thanh cong."
 } else {
-    & git clone --quiet $CLEAN_URL $VGC_DIR
+    & git clone --quiet $REPO_URL $VGC_DIR
     Write-Host "[vgc-agent-kit] Clone thanh cong."
 }
 
 # ──────────────────────────────────────────
 # Step 7: Clone/update workspace
 # ──────────────────────────────────────────
-$CLEAN_WS_URL = "https://github.com/vgcorpvn/vgc-agent-workspace.git"
+$WORKSPACE_URL = "https://github.com/vgcorpvn/vgc-agent-workspace.git"
 
 if (Test-Path "$WORKSPACE_DIR\.git") {
     Write-Host "[vgc-agent-kit] Workspace da ton tai — pulling latest..."
-    $wsUrl = & git -C $WORKSPACE_DIR remote get-url origin 2>$null
-    if ($wsUrl -ne $CLEAN_WS_URL) {
-        & git -C $WORKSPACE_DIR remote set-url origin $CLEAN_WS_URL
-    }
     & git -C $WORKSPACE_DIR pull --ff-only 2>$null
 } elseif (Test-Path $WORKSPACE_DIR) {
     $overwriteWs = Read-Host "Workspace ton tai nhung khong phai git repo. Ghi de? (y/N)"
@@ -205,11 +179,11 @@ if (Test-Path "$WORKSPACE_DIR\.git") {
         Write-Host "[vgc-agent-kit] Bo qua workspace."
     } else {
         Remove-Item -Recurse -Force $WORKSPACE_DIR
-        & git clone --quiet $CLEAN_WS_URL $WORKSPACE_DIR
+        & git clone --quiet $WORKSPACE_URL $WORKSPACE_DIR
         Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
     }
 } else {
-    & git clone --quiet $CLEAN_WS_URL $WORKSPACE_DIR
+    & git clone --quiet $WORKSPACE_URL $WORKSPACE_DIR
     Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
 }
 
@@ -280,6 +254,17 @@ Write-Host ""
 # ──────────────────────────────────────────
 if (-not (Test-Path $SKILLS_DIR)) {
     New-Item -ItemType Directory -Path $SKILLS_DIR -Force | Out-Null
+}
+
+# Remove stale symlinks (skills deleted/renamed in repo)
+Get-ChildItem -Path $SKILLS_DIR -Directory -Filter "vgc-agent-kit-*" -ErrorAction SilentlyContinue | Where-Object {
+    $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint
+} | ForEach-Object {
+    $target = (Get-Item $_.FullName).Target
+    if ($target -like "$VGC_DIR\skills\*" -and -not (Test-Path $target)) {
+        Remove-Item $_.FullName -Force
+        Write-Host "[vgc-agent-kit] Removed stale skill: $($_.Name)"
+    }
 }
 
 Get-ChildItem -Path "$VGC_DIR\skills" -Directory | ForEach-Object {

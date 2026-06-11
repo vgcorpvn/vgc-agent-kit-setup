@@ -11,25 +11,7 @@ MOBILE_TOKEN_FILE="$CONFIG_DIR/mobile-token"
 
 export GIT_TERMINAL_PROMPT=0
 
-# ──────────────────────────────────────────
-# Migration: move old paths into ~/.vgc/
-# ──────────────────────────────────────────
 mkdir -p "$VGC_ROOT"
-
-if [ -d "$HOME/.vgc-agent-kit" ] && [ ! -d "$VGC_DIR" ]; then
-    mv "$HOME/.vgc-agent-kit" "$VGC_DIR"
-    echo "[vgc-agent-kit] Migrated ~/.vgc-agent-kit → ~/.vgc/agent-kit"
-fi
-
-if [ -d "$HOME/.vgc-agent-workspace" ] && [ ! -d "$WORKSPACE_DIR" ]; then
-    mv "$HOME/.vgc-agent-workspace" "$WORKSPACE_DIR"
-    echo "[vgc-agent-kit] Migrated ~/.vgc-agent-workspace → ~/.vgc/agent-workspace"
-fi
-
-if [ -d "$HOME/.config/vgc-agent-kit" ] && [ ! -d "$CONFIG_DIR" ]; then
-    mv "$HOME/.config/vgc-agent-kit" "$CONFIG_DIR"
-    echo "[vgc-agent-kit] Migrated ~/.config/vgc-agent-kit → ~/.vgc/config"
-fi
 
 echo "======================================"
 echo "  VGC Agent Kit — Setup (Claude Code)"
@@ -236,14 +218,6 @@ echo ""
 # ──────────────────────────────────────────
 if [ -d "$VGC_DIR/.git" ]; then
     echo "[vgc-agent-kit] Repo đã tồn tại tại $VGC_DIR — pulling latest..."
-
-    CURRENT_URL="$(git -C "$VGC_DIR" remote get-url origin 2>/dev/null || echo "")"
-    CLEAN_URL="https://github.com/vgcorpvn/vgc-agent-kit.git"
-    if [ "$CURRENT_URL" != "$CLEAN_URL" ]; then
-        git -C "$VGC_DIR" remote set-url origin "$CLEAN_URL"
-        echo "[vgc-agent-kit] Remote URL cập nhật (bỏ embedded token, dùng gh credential helper)."
-    fi
-
     git -C "$VGC_DIR" checkout main 2>/dev/null || true
     git -C "$VGC_DIR" pull --ff-only origin main || {
         echo "[vgc-agent-kit] WARNING: Pull thất bại. Tiếp tục với version hiện tại."
@@ -270,14 +244,6 @@ fi
 # ──────────────────────────────────────────
 if [ -d "$WORKSPACE_DIR/.git" ]; then
     echo "[vgc-agent-kit] Workspace đã tồn tại — pulling latest..."
-
-    WS_URL="$(git -C "$WORKSPACE_DIR" remote get-url origin 2>/dev/null || echo "")"
-    CLEAN_WS_URL="https://github.com/vgcorpvn/vgc-agent-workspace.git"
-    if [ "$WS_URL" != "$CLEAN_WS_URL" ]; then
-        git -C "$WORKSPACE_DIR" remote set-url origin "$CLEAN_WS_URL"
-        echo "[vgc-agent-kit] Workspace remote URL cập nhật (dùng gh credential helper)."
-    fi
-
     git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || echo "[vgc-agent-kit] Workspace pull skipped."
 elif [ -d "$WORKSPACE_DIR" ]; then
     echo "[vgc-agent-kit] Thư mục $WORKSPACE_DIR tồn tại nhưng không phải git repo."
@@ -368,11 +334,22 @@ echo ""
 # ──────────────────────────────────────────
 mkdir -p "$CLAUDE_SKILLS_DIR"
 
+# Remove stale symlinks (skills deleted/renamed in repo)
+for link in "$CLAUDE_SKILLS_DIR"/vgc-agent-kit-*; do
+    [ -L "$link" ] || continue
+    target="$(readlink "$link")"
+    if [[ "$target" == "$VGC_DIR/skills/"* ]] && [ ! -d "$target" ]; then
+        rm "$link"
+        echo "[vgc-agent-kit] Removed stale skill: $(basename "$link")"
+    fi
+done
+
 for skill_dir in "$VGC_DIR"/skills/*/; do
     [ -d "$skill_dir" ] || continue
     skill_name="$(basename "$skill_dir")"
     [ -f "$skill_dir/SKILL.md" ] || continue
-    ln -sf "$skill_dir" "$CLAUDE_SKILLS_DIR/$skill_name"
+    rm -f "$CLAUDE_SKILLS_DIR/$skill_name"
+    ln -s "$skill_dir" "$CLAUDE_SKILLS_DIR/$skill_name"
     echo "[vgc-agent-kit] Linked skill: $skill_name"
 done
 

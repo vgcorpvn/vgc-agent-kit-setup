@@ -11,25 +11,7 @@ MOBILE_TOKEN_FILE="$CONFIG_DIR/mobile-token"
 
 export GIT_TERMINAL_PROMPT=0
 
-# ──────────────────────────────────────────
-# Migration: move old paths into ~/.vgc/
-# ──────────────────────────────────────────
 mkdir -p "$VGC_ROOT"
-
-if [ -d "$HOME/.vgc-agent-kit" ] && [ ! -d "$VGC_DIR" ]; then
-    mv "$HOME/.vgc-agent-kit" "$VGC_DIR"
-    echo "[vgc-agent-kit] Migrated ~/.vgc-agent-kit → ~/.vgc/agent-kit"
-fi
-
-if [ -d "$HOME/.vgc-agent-workspace" ] && [ ! -d "$WORKSPACE_DIR" ]; then
-    mv "$HOME/.vgc-agent-workspace" "$WORKSPACE_DIR"
-    echo "[vgc-agent-kit] Migrated ~/.vgc-agent-workspace → ~/.vgc/agent-workspace"
-fi
-
-if [ -d "$HOME/.config/vgc-agent-kit" ] && [ ! -d "$CONFIG_DIR" ]; then
-    mv "$HOME/.config/vgc-agent-kit" "$CONFIG_DIR"
-    echo "[vgc-agent-kit] Migrated ~/.config/vgc-agent-kit → ~/.vgc/config"
-fi
 
 echo "======================================"
 echo "  VGC Agent Kit — Setup (Codex CLI)"
@@ -194,14 +176,10 @@ echo ""
 # ──────────────────────────────────────────
 # Step 6: Clone/update vgc-agent-kit
 # ──────────────────────────────────────────
-CLEAN_URL="https://github.com/vgcorpvn/vgc-agent-kit.git"
+REPO_URL="https://github.com/vgcorpvn/vgc-agent-kit.git"
 
 if [ -d "$VGC_DIR/.git" ]; then
     echo "[vgc-agent-kit] Repo đã tồn tại — pulling latest..."
-    CURRENT_URL="$(git -C "$VGC_DIR" remote get-url origin 2>/dev/null || echo "")"
-    if [ "$CURRENT_URL" != "$CLEAN_URL" ]; then
-        git -C "$VGC_DIR" remote set-url origin "$CLEAN_URL"
-    fi
     git -C "$VGC_DIR" checkout main 2>/dev/null || true
     git -C "$VGC_DIR" pull --ff-only origin main || echo "[vgc-agent-kit] WARNING: Pull thất bại."
 elif [ -d "$VGC_DIR" ]; then
@@ -212,24 +190,20 @@ elif [ -d "$VGC_DIR" ]; then
         exit 0
     fi
     rm -rf "$VGC_DIR"
-    git clone --quiet "$CLEAN_URL" "$VGC_DIR"
+    git clone --quiet "$REPO_URL" "$VGC_DIR"
     echo "[vgc-agent-kit] Clone thành công."
 else
-    git clone --quiet "$CLEAN_URL" "$VGC_DIR"
+    git clone --quiet "$REPO_URL" "$VGC_DIR"
     echo "[vgc-agent-kit] Clone thành công."
 fi
 
 # ──────────────────────────────────────────
 # Step 7: Clone/update workspace
 # ──────────────────────────────────────────
-CLEAN_WS_URL="https://github.com/vgcorpvn/vgc-agent-workspace.git"
+WORKSPACE_URL="https://github.com/vgcorpvn/vgc-agent-workspace.git"
 
 if [ -d "$WORKSPACE_DIR/.git" ]; then
     echo "[vgc-agent-kit] Workspace đã tồn tại — pulling latest..."
-    WS_URL="$(git -C "$WORKSPACE_DIR" remote get-url origin 2>/dev/null || echo "")"
-    if [ "$WS_URL" != "$CLEAN_WS_URL" ]; then
-        git -C "$WORKSPACE_DIR" remote set-url origin "$CLEAN_WS_URL"
-    fi
     git -C "$WORKSPACE_DIR" pull --ff-only 2>/dev/null || echo "[vgc-agent-kit] Workspace pull skipped."
 elif [ -d "$WORKSPACE_DIR" ]; then
     read -rp "Workspace tồn tại nhưng không phải git repo. Ghi đè? (y/N): " overwrite_ws
@@ -237,11 +211,11 @@ elif [ -d "$WORKSPACE_DIR" ]; then
         echo "[vgc-agent-kit] Bỏ qua workspace setup."
     else
         rm -rf "$WORKSPACE_DIR"
-        git clone --quiet "$CLEAN_WS_URL" "$WORKSPACE_DIR"
+        git clone --quiet "$WORKSPACE_URL" "$WORKSPACE_DIR"
         echo "[vgc-agent-kit] Workspace clone thành công."
     fi
 else
-    git clone --quiet "$CLEAN_WS_URL" "$WORKSPACE_DIR"
+    git clone --quiet "$WORKSPACE_URL" "$WORKSPACE_DIR"
     echo "[vgc-agent-kit] Workspace clone thành công."
 fi
 
@@ -299,11 +273,22 @@ echo ""
 # ──────────────────────────────────────────
 mkdir -p "$SKILLS_DIR"
 
+# Remove stale symlinks (skills deleted/renamed in repo)
+for link in "$SKILLS_DIR"/vgc-agent-kit-*; do
+    [ -L "$link" ] || continue
+    target="$(readlink "$link")"
+    if [[ "$target" == "$VGC_DIR/skills/"* ]] && [ ! -d "$target" ]; then
+        rm "$link"
+        echo "[vgc-agent-kit] Removed stale skill: $(basename "$link")"
+    fi
+done
+
 for skill_dir in "$VGC_DIR"/skills/*/; do
     [ -d "$skill_dir" ] || continue
     skill_name="$(basename "$skill_dir")"
     [ -f "$skill_dir/SKILL.md" ] || continue
-    ln -sf "$skill_dir" "$SKILLS_DIR/$skill_name"
+    rm -f "$SKILLS_DIR/$skill_name"
+    ln -s "$skill_dir" "$SKILLS_DIR/$skill_name"
     echo "[vgc-agent-kit] Linked skill: $skill_name"
 done
 
