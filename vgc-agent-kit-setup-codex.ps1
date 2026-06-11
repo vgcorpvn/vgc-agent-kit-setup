@@ -1,92 +1,56 @@
 $ErrorActionPreference = "Stop"
 
-$VGC_DIR = "$env:USERPROFILE\.vgc-agent-kit"
+$VGC_ROOT = "$env:USERPROFILE\.vgc"
+$VGC_DIR = "$VGC_ROOT\agent-kit"
 $SKILLS_DIR = "$env:USERPROFILE\.agents\skills"
-$WORKSPACE_DIR = "$env:USERPROFILE\.vgc-agent-workspace"
+$WORKSPACE_DIR = "$VGC_ROOT\agent-workspace"
+$CONFIG_DIR = "$VGC_ROOT\config"
+$MOBILE_TOKEN_FILE = "$CONFIG_DIR\mobile-token"
 
-# Never prompt for credentials
 $env:GIT_TERMINAL_PROMPT = "0"
+
+# ──────────────────────────────────────────
+# Migration: move old paths into ~/.vgc/
+# ──────────────────────────────────────────
+if (-not (Test-Path $VGC_ROOT)) { New-Item -ItemType Directory -Path $VGC_ROOT -Force | Out-Null }
+
+if ((Test-Path "$env:USERPROFILE\.vgc-agent-kit") -and (-not (Test-Path $VGC_DIR))) {
+    Move-Item "$env:USERPROFILE\.vgc-agent-kit" $VGC_DIR
+    Write-Host "[vgc-agent-kit] Migrated ~/.vgc-agent-kit -> ~/.vgc/agent-kit"
+}
+
+if ((Test-Path "$env:USERPROFILE\.vgc-agent-workspace") -and (-not (Test-Path $WORKSPACE_DIR))) {
+    Move-Item "$env:USERPROFILE\.vgc-agent-workspace" $WORKSPACE_DIR
+    Write-Host "[vgc-agent-kit] Migrated ~/.vgc-agent-workspace -> ~/.vgc/agent-workspace"
+}
+
+if ((Test-Path "$env:USERPROFILE\.config\vgc-agent-kit") -and (-not (Test-Path $CONFIG_DIR))) {
+    Move-Item "$env:USERPROFILE\.config\vgc-agent-kit" $CONFIG_DIR
+    Write-Host "[vgc-agent-kit] Migrated ~/.config/vgc-agent-kit -> ~/.vgc/config"
+}
 
 Write-Host "======================================"
 Write-Host "  VGC Agent Kit - Setup (Codex CLI)"
 Write-Host "======================================"
 Write-Host ""
 
+# ──────────────────────────────────────────
 # Step 1: Check git
+# ──────────────────────────────────────────
 try {
     $gitVersion = & git --version 2>$null
     if (-not $gitVersion) { throw "not found" }
     Write-Host "[vgc-agent-kit] Git OK: $gitVersion"
 } catch {
     Write-Host "[vgc-agent-kit] Git chua duoc cai dat."
-    Write-Host "[vgc-agent-kit] Tai va cai Git for Windows tai:"
     Write-Host "  https://git-scm.com/download/win"
-    Write-Host ""
     Write-Host "Sau khi cai xong, chay lai script nay."
     exit 1
 }
 
-# Step 2: Check existing installation — reuse if already cloned
-$SKIP_CLONE = $false
-if (Test-Path $VGC_DIR) {
-    if (Test-Path "$VGC_DIR\.git") {
-        # Check if remote URL has token — if not, token was stripped and we need to re-auth
-        $currentUrl = & git -C $VGC_DIR remote get-url origin 2>$null
-        if ($currentUrl -eq "https://github.com/vgcorpvn/vgc-agent-kit.git") {
-            Write-Host "[vgc-agent-kit] URL khong co token — can nhap lai token de xac thuc."
-            $tokenInput = Read-Host "Nhap GitHub token (PAT, repo:read+write)"
-            if ([string]::IsNullOrWhiteSpace($tokenInput)) {
-                Write-Host "[vgc-agent-kit] ERROR: Token khong duoc de trong."
-                exit 1
-            }
-            & git -C $VGC_DIR remote set-url origin "https://${tokenInput}@github.com/vgcorpvn/vgc-agent-kit.git"
-            Write-Host "[vgc-agent-kit] Token da duoc cap nhat vao remote URL."
-            $GITHUB_TOKEN = $tokenInput
-        }
-        Write-Host "[vgc-agent-kit] Repo da ton tai tai $VGC_DIR — dung lai (skip clone)."
-        & git -C $VGC_DIR pull --ff-only 2>$null
-        if ($LASTEXITCODE -ne 0) { Write-Host "[vgc-agent-kit] Pull skipped (offline hoac token het han)." }
-        $SKIP_CLONE = $true
-    } else {
-        Write-Host "[vgc-agent-kit] Thu muc $VGC_DIR ton tai nhung khong phai git repo."
-        $overwrite = Read-Host "Ghi de? (y/N)"
-        if ($overwrite -ne "y" -and $overwrite -ne "Y") {
-            Write-Host "[vgc-agent-kit] Huy bo."
-            exit 0
-        }
-        Remove-Item -Recurse -Force $VGC_DIR
-    }
-}
-
-if (-not $SKIP_CLONE) {
-    # Step 3: Ask for token
-    Write-Host ""
-    Write-Host "Can GitHub Personal Access Token (PAT) voi quyen repo:read+write."
-    Write-Host "Token nay dung cho ca vgc-agent-kit va vgc-agent-workspace."
-    Write-Host "Tao tai: https://github.com/settings/tokens"
-    Write-Host ""
-    $GITHUB_TOKEN = Read-Host "Nhap GitHub token" -AsSecureString
-    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($GITHUB_TOKEN)
-    $TOKEN_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
-
-    if ([string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
-        Write-Host "[vgc-agent-kit] ERROR: Token khong duoc de trong."
-        exit 1
-    }
-
-    # Step 4: Clone repo (token in URL)
-    Write-Host "[vgc-agent-kit] Dang clone repository..."
-    & git clone --quiet "https://${TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-kit.git" $VGC_DIR 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "[vgc-agent-kit] ERROR: Clone that bai. Kiem tra lai token va quyen truy cap repo."
-        exit 1
-    }
-
-    Write-Host "[vgc-agent-kit] Clone thanh cong."
-}
-
-# Step 5b: Check/install gh CLI
+# ──────────────────────────────────────────
+# Step 2: Check/install gh CLI
+# ──────────────────────────────────────────
 $ghInstalled = $false
 try {
     $ghVersion = & gh --version 2>$null | Select-Object -First 1
@@ -108,110 +72,212 @@ if (-not $ghInstalled) {
     }
 }
 
-# Step 5c: Clone workspace repo
-$SKIP_WORKSPACE = $false
-if (Test-Path $WORKSPACE_DIR) {
-    if (Test-Path "$WORKSPACE_DIR\.git") {
-        # Check if remote URL has token — if not, re-prompt
-        $wsUrl = & git -C $WORKSPACE_DIR remote get-url origin 2>$null
-        if ($wsUrl -eq "https://github.com/vgcorpvn/vgc-agent-workspace.git") {
-            if (-not [string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
-                $WS_TOKEN_PLAIN = $TOKEN_PLAIN
-                Write-Host "[vgc-agent-kit] Workspace URL khong co token — cap nhat bang kit token."
-            } else {
-                Write-Host "[vgc-agent-kit] Workspace URL khong co token — can nhap lai."
-                $wsTokenInput = Read-Host "Nhap GitHub token (PAT, repo:read+write)"
-                $WS_TOKEN_PLAIN = $wsTokenInput
-            }
-            if (-not [string]::IsNullOrWhiteSpace($WS_TOKEN_PLAIN)) {
-                & git -C $WORKSPACE_DIR remote set-url origin "https://${WS_TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-workspace.git"
-            }
-        }
-        Write-Host "[vgc-agent-kit] Workspace repo da ton tai — dung lai."
-        & git -C $WORKSPACE_DIR pull --ff-only 2>$null
-        if ($LASTEXITCODE -ne 0) { Write-Host "[vgc-agent-kit] Workspace pull skipped." }
-        $SKIP_WORKSPACE = $true
-    } else {
-        Write-Host "[vgc-agent-kit] Thu muc $WORKSPACE_DIR ton tai nhung khong phai git repo."
-        $overwriteWs = Read-Host "Ghi de? (y/N)"
-        if ($overwriteWs -ne "y" -and $overwriteWs -ne "Y") {
-            Write-Host "[vgc-agent-kit] Bo qua workspace setup."
-            $SKIP_WORKSPACE = $true
-        } else {
-            Remove-Item -Recurse -Force $WORKSPACE_DIR
-        }
-    }
-}
+# ──────────────────────────────────────────
+# Step 3: Token A — kit + workspace (read+write)
+# ──────────────────────────────────────────
+$NEED_TOKEN_A = $true
 
-if (-not $SKIP_WORKSPACE) {
-    # Reuse Token A for workspace (same token, read+write)
-    if (-not [string]::IsNullOrWhiteSpace($TOKEN_PLAIN)) {
-        $WS_TOKEN_PLAIN = $TOKEN_PLAIN
-        Write-Host "[vgc-agent-kit] Dung cung token cho workspace (read+write)."
-    } else {
-        Write-Host ""
-        Write-Host "Can GitHub token (PAT) voi quyen repo:read+write cho workspace."
-        $WS_TOKEN = Read-Host "Nhap GitHub token" -AsSecureString
-        $BSTR_WS = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($WS_TOKEN)
-        $WS_TOKEN_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_WS)
-        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_WS)
-    }
-
-    if ([string]::IsNullOrWhiteSpace($WS_TOKEN_PLAIN)) {
-        Write-Host "[vgc-agent-kit] WARNING: Token workspace trong. Bo qua workspace setup."
-    } else {
-        Write-Host "[vgc-agent-kit] Dang clone workspace..."
-        & git clone --quiet "https://${WS_TOKEN_PLAIN}@github.com/vgcorpvn/vgc-agent-workspace.git" $WORKSPACE_DIR 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "[vgc-agent-kit] WARNING: Clone workspace that bai. Kiem tra token va quyen."
-        } else {
-            Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
-
-            # Auth gh CLI
-            if ($ghInstalled) {
-                try {
-                    $WS_TOKEN_PLAIN | & gh auth login --with-token 2>$null
-                    Write-Host "[vgc-agent-kit] gh CLI da auth."
-                } catch {
-                    Write-Host "[vgc-agent-kit] WARNING: gh auth login that bai."
-                }
-            }
-        }
-    }
-}
-
-# Step 5d: Store mobile repo token for gh api access (optional)
-$SKIP_MOBILE = $false
 if ($ghInstalled) {
-    try {
-        $mobileCheck = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
-        if ($mobileCheck -eq "mobile.vhandicap.com") {
-            Write-Host "[vgc-agent-kit] Mobile repo da truy cap duoc — skip token."
-            $SKIP_MOBILE = $true
+    & gh auth status -h github.com 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host ""
+        Write-Host "[vgc-agent-kit] gh CLI da authenticated."
+
+        $reposOk = $true
+        & gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { $reposOk = $false }
+        & gh api repos/vgcorpvn/vgc-agent-workspace --jq '.name' 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { $reposOk = $false }
+
+        if ($reposOk) {
+            Write-Host "[vgc-agent-kit] Token A truy cap OK — dung lai."
+            $NEED_TOKEN_A = $false
+        } else {
+            Write-Host "[vgc-agent-kit] Token A thieu quyen — can nhap token moi."
         }
-    } catch {}
-}
-
-if (-not $SKIP_MOBILE) {
-    Write-Host ""
-    Write-Host "Can GitHub Token thu 2 (PAT) voi quyen repo:read cho mobile repo."
-    Write-Host "Token nay dung de agent doc screen-index.json va source code."
-    Write-Host "(Bo qua neu khong can discover-screen skill)"
-    Write-Host ""
-    $MOBILE_TOKEN = Read-Host "Nhap GitHub token (mobile, Enter de bo qua)" -AsSecureString
-    $BSTR_M = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($MOBILE_TOKEN)
-    $MOBILE_PLAIN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_M)
-    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_M)
-
-    if (-not [string]::IsNullOrWhiteSpace($MOBILE_PLAIN)) {
-        & git config --global credential.helper store
-        $mobileCred = "protocol=https`nhost=github.com`nusername=${MOBILE_PLAIN}`npassword=${MOBILE_PLAIN}`n"
-        $mobileCred | & git credential approve 2>$null
-        Write-Host "[vgc-agent-kit] Mobile repo token da luu."
     }
 }
 
-# Step 6: Symlink skills using Junction (no admin required)
+if ($NEED_TOKEN_A) {
+    Write-Host ""
+    Write-Host "+---------------------------------------------------------+"
+    Write-Host "|  Token A — cho kit + workspace (read+write)              |"
+    Write-Host "|                                                          |"
+    Write-Host "|  Quyen toi thieu: repo, read:org                         |"
+    Write-Host "|  Token can truy cap duoc:                                |"
+    Write-Host "|    - vgcorpvn/vgc-agent-kit        (read+write)          |"
+    Write-Host "|    - vgcorpvn/vgc-agent-workspace   (read+write)         |"
+    Write-Host "|                                                          |"
+    Write-Host "|  Tao tai: https://github.com/settings/tokens             |"
+    Write-Host "+---------------------------------------------------------+"
+    Write-Host ""
+
+    $secureToken = Read-Host "Nhap Token A" -AsSecureString
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    $TOKEN_A = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+
+    if ([string]::IsNullOrWhiteSpace($TOKEN_A)) {
+        Write-Host "[vgc-agent-kit] ERROR: Token khong duoc de trong."
+        exit 1
+    }
+
+    if ($ghInstalled) {
+        Write-Host "[vgc-agent-kit] Dang xac thuc gh CLI voi Token A..."
+        $TOKEN_A | & gh auth login -h github.com --with-token 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[vgc-agent-kit] ERROR: gh auth login that bai."
+            exit 1
+        }
+        Write-Host "[vgc-agent-kit] gh auth OK."
+    }
+}
+
+# ──────────────────────────────────────────
+# Step 4: Setup gh as git credential helper
+# ──────────────────────────────────────────
+if ($ghInstalled) {
+    Write-Host "[vgc-agent-kit] Dong bo credentials: gh -> git..."
+    & gh auth setup-git -h github.com 2>$null
+    Write-Host "[vgc-agent-kit] git credential helper = gh CLI."
+}
+
+# ──────────────────────────────────────────
+# Step 5: Verify Token A
+# ──────────────────────────────────────────
+Write-Host ""
+Write-Host "[vgc-agent-kit] Kiem tra Token A..."
+
+$verifyOk = $true
+if ($ghInstalled) {
+    $r1 = & gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' 2>$null
+    if ($LASTEXITCODE -eq 0 -and $r1) { Write-Host "  OK Agent Kit" } else { Write-Host "  FAIL Agent Kit"; $verifyOk = $false }
+    $r2 = & gh api repos/vgcorpvn/vgc-agent-workspace --jq '.name' 2>$null
+    if ($LASTEXITCODE -eq 0 -and $r2) { Write-Host "  OK Workspace" } else { Write-Host "  FAIL Workspace"; $verifyOk = $false }
+}
+
+if (-not $verifyOk) {
+    Write-Host "[vgc-agent-kit] ERROR: Token A khong du quyen."
+    exit 1
+}
+
+Write-Host ""
+
+# ──────────────────────────────────────────
+# Step 6: Clone/update vgc-agent-kit
+# ──────────────────────────────────────────
+$CLEAN_URL = "https://github.com/vgcorpvn/vgc-agent-kit.git"
+
+if (Test-Path "$VGC_DIR\.git") {
+    Write-Host "[vgc-agent-kit] Repo da ton tai — pulling latest..."
+    $currentUrl = & git -C $VGC_DIR remote get-url origin 2>$null
+    if ($currentUrl -ne $CLEAN_URL) {
+        & git -C $VGC_DIR remote set-url origin $CLEAN_URL
+    }
+    & git -C $VGC_DIR checkout main 2>$null
+    & git -C $VGC_DIR pull --ff-only origin main 2>$null
+} elseif (Test-Path $VGC_DIR) {
+    $overwrite = Read-Host "Thu muc $VGC_DIR ton tai nhung khong phai git repo. Ghi de? (y/N)"
+    if ($overwrite -ne "y" -and $overwrite -ne "Y") { exit 0 }
+    Remove-Item -Recurse -Force $VGC_DIR
+    & git clone --quiet $CLEAN_URL $VGC_DIR
+    Write-Host "[vgc-agent-kit] Clone thanh cong."
+} else {
+    & git clone --quiet $CLEAN_URL $VGC_DIR
+    Write-Host "[vgc-agent-kit] Clone thanh cong."
+}
+
+# ──────────────────────────────────────────
+# Step 7: Clone/update workspace
+# ──────────────────────────────────────────
+$CLEAN_WS_URL = "https://github.com/vgcorpvn/vgc-agent-workspace.git"
+
+if (Test-Path "$WORKSPACE_DIR\.git") {
+    Write-Host "[vgc-agent-kit] Workspace da ton tai — pulling latest..."
+    $wsUrl = & git -C $WORKSPACE_DIR remote get-url origin 2>$null
+    if ($wsUrl -ne $CLEAN_WS_URL) {
+        & git -C $WORKSPACE_DIR remote set-url origin $CLEAN_WS_URL
+    }
+    & git -C $WORKSPACE_DIR pull --ff-only 2>$null
+} elseif (Test-Path $WORKSPACE_DIR) {
+    $overwriteWs = Read-Host "Workspace ton tai nhung khong phai git repo. Ghi de? (y/N)"
+    if ($overwriteWs -ne "y" -and $overwriteWs -ne "Y") {
+        Write-Host "[vgc-agent-kit] Bo qua workspace."
+    } else {
+        Remove-Item -Recurse -Force $WORKSPACE_DIR
+        & git clone --quiet $CLEAN_WS_URL $WORKSPACE_DIR
+        Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
+    }
+} else {
+    & git clone --quiet $CLEAN_WS_URL $WORKSPACE_DIR
+    Write-Host "[vgc-agent-kit] Workspace clone thanh cong."
+}
+
+# ──────────────────────────────────────────
+# Step 8: Token B — mobile repo (read-only, optional)
+# ──────────────────────────────────────────
+$skipMobile = $false
+
+if ($ghInstalled) {
+    $mobileCheck = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
+    if ($LASTEXITCODE -eq 0 -and $mobileCheck) {
+        Write-Host "[vgc-agent-kit] Token A da truy cap duoc mobile repo — bo qua Token B."
+        if (-not (Test-Path $CONFIG_DIR)) { New-Item -ItemType Directory -Path $CONFIG_DIR -Force | Out-Null }
+        & gh auth token -h github.com 2>$null | Out-File -FilePath $MOBILE_TOKEN_FILE -Encoding ascii -NoNewline
+        $skipMobile = $true
+    }
+}
+
+if (-not $skipMobile -and (Test-Path $MOBILE_TOKEN_FILE)) {
+    $existing = Get-Content $MOBILE_TOKEN_FILE -Raw -ErrorAction SilentlyContinue
+    if ($existing) {
+        $env:GH_TOKEN = $existing.Trim()
+        $check = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
+        Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+        if ($LASTEXITCODE -eq 0 -and $check) {
+            Write-Host "[vgc-agent-kit] Token B (mobile) con hop le — dung lai."
+            $skipMobile = $true
+        }
+    }
+}
+
+if (-not $skipMobile) {
+    Write-Host ""
+    Write-Host "+---------------------------------------------------------+"
+    Write-Host "|  Token B — cho mobile repo (read-only, optional)         |"
+    Write-Host "|                                                          |"
+    Write-Host "|  Quyen: repo:read cho vgcorpvn/mobile.vhandicap.com     |"
+    Write-Host "|  Enter de bo qua                                         |"
+    Write-Host "+---------------------------------------------------------+"
+    Write-Host ""
+
+    $secureTokenB = Read-Host "Nhap Token B (Enter de bo qua)" -AsSecureString
+    $BSTR_B = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureTokenB)
+    $TOKEN_B = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_B)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_B)
+
+    if (-not [string]::IsNullOrWhiteSpace($TOKEN_B)) {
+        $env:GH_TOKEN = $TOKEN_B
+        $check = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
+        Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+
+        if ($LASTEXITCODE -eq 0 -and $check) {
+            if (-not (Test-Path $CONFIG_DIR)) { New-Item -ItemType Directory -Path $CONFIG_DIR -Force | Out-Null }
+            $TOKEN_B | Out-File -FilePath $MOBILE_TOKEN_FILE -Encoding ascii -NoNewline
+            Write-Host "[vgc-agent-kit] Token B OK — mobile repo truy cap duoc."
+        } else {
+            Write-Host "[vgc-agent-kit] WARNING: Token B khong truy cap duoc mobile repo."
+        }
+    } else {
+        Write-Host "[vgc-agent-kit] Bo qua Token B."
+    }
+}
+
+Write-Host ""
+
+# ──────────────────────────────────────────
+# Step 9: Symlink skills
+# ──────────────────────────────────────────
 if (-not (Test-Path $SKILLS_DIR)) {
     New-Item -ItemType Directory -Path $SKILLS_DIR -Force | Out-Null
 }
@@ -222,7 +288,6 @@ Get-ChildItem -Path "$VGC_DIR\skills" -Directory | ForEach-Object {
     $linkPath = Join-Path $SKILLS_DIR $skillName
 
     if (-not (Test-Path "$skillPath\SKILL.md")) { return }
-
     if (Test-Path $linkPath) { Remove-Item $linkPath -Force -Recurse }
 
     try {
@@ -233,13 +298,13 @@ Get-ChildItem -Path "$VGC_DIR\skills" -Directory | ForEach-Object {
     Write-Host "[vgc-agent-kit] Linked skill: $skillName"
 }
 
-# Step 7: Add alias to PowerShell profile
+# ──────────────────────────────────────────
+# Step 10: Add alias
+# ──────────────────────────────────────────
 $profilePath = $PROFILE
 if (-not (Test-Path $profilePath)) {
     $profileDir = Split-Path $profilePath -Parent
-    if (-not (Test-Path $profileDir)) {
-        New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
-    }
+    if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
     New-Item -ItemType File -Path $profilePath -Force | Out-Null
 }
 
@@ -262,6 +327,12 @@ Write-Host ""
 Write-Host "  Skills location: $SKILLS_DIR"
 Write-Host "  Repo location:   $VGC_DIR"
 Write-Host "  Workspace:       $WORKSPACE_DIR"
-Write-Host "  Auto-sync:       Pull tu dong moi khi dung skill"
+Write-Host "  Auth:"
+Write-Host "    Token A: gh CLI (kit + workspace)"
+if (Test-Path $MOBILE_TOKEN_FILE) {
+    Write-Host "    Token B: $MOBILE_TOKEN_FILE (mobile, read-only)"
+} else {
+    Write-Host "    Token B: khong co"
+}
 Write-Host "  Manual update:   vgc-agent-kit-update-codex"
 Write-Host ""
