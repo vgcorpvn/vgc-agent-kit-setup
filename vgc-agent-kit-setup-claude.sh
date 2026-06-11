@@ -367,7 +367,7 @@ if ! grep -q "vgc-agent-kit-update-claude" "$SHELL_RC" 2>/dev/null; then
         echo ""
         echo "# VGC Agent Kit (Claude Code)"
         echo "$ALIAS_LINE"
-    } >> "$SHELL_RC" || echo "[vgc-agent-kit] WARNING: Không thể ghi alias vào $SHELL_RC"
+    } >> "$SHELL_RC" || echo "[vgc-agent-kit] WARNING: Could not write alias to $SHELL_RC"
     echo "[vgc-agent-kit] Alias added to $SHELL_RC"
 fi
 
