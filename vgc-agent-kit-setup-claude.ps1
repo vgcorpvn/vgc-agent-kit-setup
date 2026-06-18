@@ -93,7 +93,7 @@ if ($ghInstalled) {
 if ($NEED_MAIN_TOKEN) {
     Write-Host ""
     Write-Host "+---------------------------------------------------------+"
-    Write-Host "|  GitHub PAT — for kit + workspace repos (read+write)    |"
+    Write-Host "|  Main token (GitHub PAT) — for kit + workspace             |"
     Write-Host "|                                                         |"
     Write-Host "|  Minimum scopes: repo, read:org                         |"
     Write-Host "|  Token must have access to:                             |"
@@ -104,7 +104,7 @@ if ($NEED_MAIN_TOKEN) {
     Write-Host "+---------------------------------------------------------+"
     Write-Host ""
 
-    $secureToken = Read-Host "Enter GitHub PAT" -AsSecureString
+    $secureToken = Read-Host "Enter main token (GitHub PAT)" -AsSecureString
     $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
     $MAIN_TOKEN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
     [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
@@ -198,7 +198,7 @@ if (Test-Path "$WORKSPACE_DIR\.git") {
 }
 
 # ──────────────────────────────────────────
-# Step 9: Scout token (optional) — source repo (read-only, optional)
+# Step 9: Scout token (optional) — source repos (read-only)
 # ──────────────────────────────────────────
 $skipScout = $false
 
@@ -228,7 +228,7 @@ if (-not $skipScout -and (Test-Path $SCOUT_TOKEN_FILE)) {
 if (-not $skipScout) {
     Write-Host ""
     Write-Host "+---------------------------------------------------------+"
-    Write-Host "|  Scout token — for source repo (read-only, optional)   |"
+    Write-Host "|  Scout token — for source repos (read-only, optional)     |"
     Write-Host "|                                                         |"
     Write-Host "|  Scope: repo:read for vgcorpvn/mobile.vhandicap.com    |"
     Write-Host "|  Press Enter to skip if not needed                      |"

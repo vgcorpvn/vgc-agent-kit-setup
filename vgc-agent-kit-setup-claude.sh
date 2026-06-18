@@ -123,17 +123,16 @@ fi
 if [ "$NEED_MAIN_TOKEN" = true ]; then
     echo ""
     echo "┌──────────────────────────────────────────────────────────┐"
-    echo "│  GitHub PAT — for kit + workspace repos (read+write)   │"
-    echo "│                                                        │"
-    echo "│  Minimum scopes: repo, read:org                        │"
-    echo "│  Token must have access to:                            │"
-    echo "│    • vgcorpvn/vgc-agent-kit       (read+write)         │"
-    echo "│    • vgcorpvn/vgc-agent-workspace (read+write)         │"
-    echo "│                                                        │"
-    echo "│  Create at: https://github.com/settings/tokens         │"
-    echo "└──────────────────────────────────────────────────────────┘"
+    echo "│  Main token (GitHub PAT) — for kit + workspace            │"
+    echo "│  Required: repo, read:org scopes                          │"
+    echo "│  Required access:                                         │"
+    echo "│    • vgcorpvn/vgc-agent-kit       (read+write)             │"
+    echo "│    • vgcorpvn/vgc-agent-workspace (read+write)             │"
+    echo "│                                                            │"
+    echo "│  Create at: https://github.com/settings/tokens             │"
+    echo "└──────────────────────────────────────────────────────────────┘"
     echo ""
-    read -rsp "Enter GitHub PAT: " MAIN_TOKEN
+    read -rsp "Enter main token (GitHub PAT): " MAIN_TOKEN
     echo ""
 
     if [ -z "$MAIN_TOKEN" ]; then
@@ -289,7 +288,7 @@ if [ "$SKIP_SCOUT" = false ] && [ -f "$SCOUT_TOKEN_FILE" ]; then
             echo "[vgc-agent-kit] Existing scout token is valid — reusing."
             SKIP_SCOUT=true
         else
-            echo "[vgc-agent-kit] Repo scout token expired — need to re-enter."
+            echo "[vgc-agent-kit] Scout token expired — need to re-enter."
         fi
     fi
 fi
@@ -297,12 +296,11 @@ fi
 if [ "$SKIP_SCOUT" = false ]; then
     echo ""
     echo "┌──────────────────────────────────────────────────────────┐"
-    echo "│  Repo scout token — for source repos (read-only)  │"
-    echo "│                                                        │"
-    echo "│  Scope: repo:read for vgcorpvn/mobile.vhandicap.com   │"
-    echo "│  Used by skill /discover-repo (reads knowledge/index.json + DS + BD)   │"
-    echo "│  Press Enter to skip if not needed                     │"
-    echo "└──────────────────────────────────────────────────────────┘"
+    echo "│  Scout token — for source repos (read-only)              │"
+    echo "│  Required scope: repo:read                               │"
+    echo "│  Required access: source repos in repo-registry          │"
+    echo "│  Press Enter to skip if not needed                       │"
+    echo "└──────────────────────────────────────────────────────────────┘"
     echo ""
     read -rsp "Enter scout token (Enter to skip): " SCOUT_PAT
     echo ""
@@ -313,12 +311,12 @@ if [ "$SKIP_SCOUT" = false ]; then
             mkdir -p "$CONFIG_DIR"
             echo "$SCOUT_PAT" > "$SCOUT_TOKEN_FILE"
             chmod 600 "$SCOUT_TOKEN_FILE"
-            echo "[vgc-agent-kit] Repo scout token OK."
+            echo "[vgc-agent-kit] ✓ Scout token OK."
             echo ""
             echo "[vgc-agent-kit] Verifying scout token..."
             verify_repo "vgcorpvn/mobile.vhandicap.com" "Source repo" false "$SCOUT_PAT"
         else
-            echo "[vgc-agent-kit] WARNING: Repo scout token is invalid."
+            echo "[vgc-agent-kit] WARNING: Scout token is invalid."
             echo "[vgc-agent-kit] Skill /discover-repo will not work."
         fi
     else
@@ -387,9 +385,9 @@ echo "  Workspace:       $WORKSPACE_DIR"
 echo "  Auth:"
 echo "    gh CLI:        authenticated (kit + workspace)"
 if [ -f "$SCOUT_TOKEN_FILE" ]; then
-echo "    Repo scout token:  $SCOUT_TOKEN_FILE"
+echo "    Scout token:       $SCOUT_TOKEN_FILE"
 else
-echo "    Repo scout token:  not configured (skill /discover-repo disabled)"
+echo "    Scout token:       not configured (/discover-repo limited)"
 fi
 echo "  Auto-sync:       pulls automatically when a skill is used"
 echo "  Manual update:   vgc-agent-kit-update-claude"

@@ -106,7 +106,7 @@ fi
 if [ "$NEED_MAIN_TOKEN" = true ]; then
     echo ""
     echo "┌──────────────────────────────────────────────────────────┐"
-    echo "│  GitHub PAT — for kit + workspace repos (read+write)   │"
+    echo "│  Main token (GitHub PAT) — for kit + workspace            │"
     echo "│                                                        │"
     echo "│  Minimum scopes: repo, read:org                        │"
     echo "│  Token must have access to:                            │"
@@ -116,7 +116,7 @@ if [ "$NEED_MAIN_TOKEN" = true ]; then
     echo "│  Create at: https://github.com/settings/tokens         │"
     echo "└──────────────────────────────────────────────────────────┘"
     echo ""
-    read -rsp "Enter GitHub PAT: " MAIN_TOKEN
+    read -rsp "Enter main token (GitHub PAT): " MAIN_TOKEN
     echo ""
 
     if [ -z "$MAIN_TOKEN" ]; then
@@ -243,7 +243,7 @@ fi
 if [ "$SKIP_SCOUT" = false ]; then
     echo ""
     echo "┌──────────────────────────────────────────────────────────┐"
-    echo "│  Repo scout token — for source repos (read-only)  │"
+    echo "│  Scout token — for source repos (read-only)              │"
     echo "│                                                        │"
     echo "│  Scope: repo:read for vgcorpvn/mobile.vhandicap.com   │"
     echo "│  Press Enter to skip if not needed                     │"
@@ -257,9 +257,9 @@ if [ "$SKIP_SCOUT" = false ]; then
             mkdir -p "$CONFIG_DIR"
             echo "$SCOUT_PAT" > "$SCOUT_TOKEN_FILE"
             chmod 600 "$SCOUT_TOKEN_FILE"
-            echo "[vgc-agent-kit] ✓ Repo scout token OK."
+            echo "[vgc-agent-kit] ✓ Scout token OK."
         else
-            echo "[vgc-agent-kit] WARNING: Repo scout token is invalid."
+            echo "[vgc-agent-kit] WARNING: Scout token is invalid."
         fi
     else
         echo "[vgc-agent-kit] Skipped scout token."
@@ -324,7 +324,7 @@ echo "  Workspace:       $WORKSPACE_DIR"
 echo "  Auth:"
 echo "    gh CLI:        authenticated (kit + workspace)"
 if [ -f "$SCOUT_TOKEN_FILE" ]; then
-echo "    Repo scout token:  $SCOUT_TOKEN_FILE"
+echo "    Scout token:       $SCOUT_TOKEN_FILE"
 else
 echo "    Repo scout token:  not configured"
 fi
