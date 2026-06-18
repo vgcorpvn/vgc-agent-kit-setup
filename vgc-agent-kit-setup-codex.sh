@@ -7,7 +7,7 @@ VGC_DIR="$VGC_ROOT/agent-kit"
 SKILLS_DIR="$HOME/.agents/skills"
 WORKSPACE_DIR="$VGC_ROOT/agent-workspace"
 CONFIG_DIR="$VGC_ROOT/config"
-MOBILE_TOKEN_FILE="$CONFIG_DIR/mobile-token"
+SCOUT_TOKEN_FILE="$CONFIG_DIR/scout-token"
 
 export GIT_TERMINAL_PROMPT=0
 
@@ -220,49 +220,49 @@ else
 fi
 
 # ──────────────────────────────────────────
-# Step 8: Mobile token (optional) — mobile repo (read-only, optional)
+# Step 8: Scout token (optional) — source repos (read-only)
 # ──────────────────────────────────────────
-SKIP_MOBILE=false
+SKIP_SCOUT=false
 
 if command -v gh &>/dev/null && gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
-    echo "[vgc-agent-kit] Token already has mobile repo access — no separate token needed."
+    echo "[vgc-agent-kit] Token already has source repo access — no separate token needed."
     mkdir -p "$CONFIG_DIR"
-    gh auth token -h github.com 2>/dev/null > "$MOBILE_TOKEN_FILE" || true
-    chmod 600 "$MOBILE_TOKEN_FILE" 2>/dev/null || true
-    SKIP_MOBILE=true
+    gh auth token -h github.com 2>/dev/null > "$SCOUT_TOKEN_FILE" || true
+    chmod 600 "$SCOUT_TOKEN_FILE" 2>/dev/null || true
+    SKIP_SCOUT=true
 fi
 
-if [ "$SKIP_MOBILE" = false ] && [ -f "$MOBILE_TOKEN_FILE" ]; then
-    EXISTING=$(cat "$MOBILE_TOKEN_FILE" 2>/dev/null || echo "")
+if [ "$SKIP_SCOUT" = false ] && [ -f "$SCOUT_TOKEN_FILE" ]; then
+    EXISTING=$(cat "$SCOUT_TOKEN_FILE" 2>/dev/null || echo "")
     if [ -n "$EXISTING" ] && GH_TOKEN="$EXISTING" gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
-        echo "[vgc-agent-kit] Existing mobile token is valid — reusing."
-        SKIP_MOBILE=true
+        echo "[vgc-agent-kit] Existing scout token is valid — reusing."
+        SKIP_SCOUT=true
     fi
 fi
 
-if [ "$SKIP_MOBILE" = false ]; then
+if [ "$SKIP_SCOUT" = false ]; then
     echo ""
     echo "┌──────────────────────────────────────────────────────────┐"
-    echo "│  Mobile token — for mobile repo (read-only, optional)  │"
+    echo "│  Repo scout token — for source repos (read-only)  │"
     echo "│                                                        │"
     echo "│  Scope: repo:read for vgcorpvn/mobile.vhandicap.com   │"
     echo "│  Press Enter to skip if not needed                     │"
     echo "└──────────────────────────────────────────────────────────┘"
     echo ""
-    read -rsp "Enter mobile token (Enter to skip): " MOBILE_PAT
+    read -rsp "Enter scout token (Enter to skip): " SCOUT_PAT
     echo ""
 
-    if [ -n "$MOBILE_PAT" ]; then
-        if GH_TOKEN="$MOBILE_PAT" gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
+    if [ -n "$SCOUT_PAT" ]; then
+        if GH_TOKEN="$SCOUT_PAT" gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' &>/dev/null; then
             mkdir -p "$CONFIG_DIR"
-            echo "$MOBILE_PAT" > "$MOBILE_TOKEN_FILE"
-            chmod 600 "$MOBILE_TOKEN_FILE"
-            echo "[vgc-agent-kit] ✓ Mobile token OK."
+            echo "$SCOUT_PAT" > "$SCOUT_TOKEN_FILE"
+            chmod 600 "$SCOUT_TOKEN_FILE"
+            echo "[vgc-agent-kit] ✓ Repo scout token OK."
         else
-            echo "[vgc-agent-kit] WARNING: Mobile token is invalid."
+            echo "[vgc-agent-kit] WARNING: Repo scout token is invalid."
         fi
     else
-        echo "[vgc-agent-kit] Skipped mobile token."
+        echo "[vgc-agent-kit] Skipped scout token."
     fi
 fi
 
@@ -323,10 +323,10 @@ echo "  Repo location:   $VGC_DIR"
 echo "  Workspace:       $WORKSPACE_DIR"
 echo "  Auth:"
 echo "    gh CLI:        authenticated (kit + workspace)"
-if [ -f "$MOBILE_TOKEN_FILE" ]; then
-echo "    Mobile token:  $MOBILE_TOKEN_FILE"
+if [ -f "$SCOUT_TOKEN_FILE" ]; then
+echo "    Repo scout token:  $SCOUT_TOKEN_FILE"
 else
-echo "    Mobile token:  not configured"
+echo "    Repo scout token:  not configured"
 fi
 echo "  Manual update:   vgc-agent-kit-update-codex"
 echo ""

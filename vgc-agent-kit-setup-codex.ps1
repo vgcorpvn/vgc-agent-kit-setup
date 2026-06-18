@@ -5,7 +5,7 @@ $VGC_DIR = "$VGC_ROOT\agent-kit"
 $SKILLS_DIR = "$env:USERPROFILE\.agents\skills"
 $WORKSPACE_DIR = "$VGC_ROOT\agent-workspace"
 $CONFIG_DIR = "$VGC_ROOT\config"
-$MOBILE_TOKEN_FILE = "$CONFIG_DIR\mobile-token"
+$SCOUT_TOKEN_FILE = "$CONFIG_DIR\scout-token"
 
 $env:GIT_TERMINAL_PROMPT = "0"
 
@@ -188,62 +188,62 @@ if (Test-Path "$WORKSPACE_DIR\.git") {
 }
 
 # ──────────────────────────────────────────
-# Step 8: Mobile token (optional) — mobile repo (read-only, optional)
+# Step 8: Scout token (optional) — source repo (read-only, optional)
 # ──────────────────────────────────────────
-$skipMobile = $false
+$skipScout = $false
 
 if ($ghInstalled) {
-    $mobileCheck = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
-    if ($LASTEXITCODE -eq 0 -and $mobileCheck) {
-        Write-Host "[vgc-agent-kit] Token already has mobile repo access — no separate token needed."
+    $scoutCheck = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
+    if ($LASTEXITCODE -eq 0 -and $scoutCheck) {
+        Write-Host "[vgc-agent-kit] Token already has source repo access — no separate token needed."
         if (-not (Test-Path $CONFIG_DIR)) { New-Item -ItemType Directory -Path $CONFIG_DIR -Force | Out-Null }
-        & gh auth token -h github.com 2>$null | Out-File -FilePath $MOBILE_TOKEN_FILE -Encoding ascii -NoNewline
-        $skipMobile = $true
+        & gh auth token -h github.com 2>$null | Out-File -FilePath $SCOUT_TOKEN_FILE -Encoding ascii -NoNewline
+        $skipScout = $true
     }
 }
 
-if (-not $skipMobile -and (Test-Path $MOBILE_TOKEN_FILE)) {
-    $existing = Get-Content $MOBILE_TOKEN_FILE -Raw -ErrorAction SilentlyContinue
+if (-not $skipScout -and (Test-Path $SCOUT_TOKEN_FILE)) {
+    $existing = Get-Content $SCOUT_TOKEN_FILE -Raw -ErrorAction SilentlyContinue
     if ($existing) {
         $env:GH_TOKEN = $existing.Trim()
         $check = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
         Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $check) {
-            Write-Host "[vgc-agent-kit] Existing mobile token is valid — reusing."
-            $skipMobile = $true
+            Write-Host "[vgc-agent-kit] Existing scout token is valid — reusing."
+            $skipScout = $true
         }
     }
 }
 
-if (-not $skipMobile) {
+if (-not $skipScout) {
     Write-Host ""
     Write-Host "+---------------------------------------------------------+"
-    Write-Host "|  Mobile token — for mobile repo (read-only, optional)   |"
+    Write-Host "|  Scout token — for source repo (read-only, optional)   |"
     Write-Host "|                                                         |"
     Write-Host "|  Scope: repo:read for vgcorpvn/mobile.vhandicap.com    |"
     Write-Host "|  Press Enter to skip if not needed                      |"
     Write-Host "+---------------------------------------------------------+"
     Write-Host ""
 
-    $secureTokenB = Read-Host "Enter mobile token (Enter to skip)" -AsSecureString
+    $secureTokenB = Read-Host "Enter scout token (Enter to skip)" -AsSecureString
     $BSTR_B = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureTokenB)
-    $MOBILE_PAT = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_B)
+    $SCOUT_PAT = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_B)
     [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_B)
 
-    if (-not [string]::IsNullOrWhiteSpace($MOBILE_PAT)) {
-        $env:GH_TOKEN = $MOBILE_PAT
+    if (-not [string]::IsNullOrWhiteSpace($SCOUT_PAT)) {
+        $env:GH_TOKEN = $SCOUT_PAT
         $check = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
         Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
 
         if ($LASTEXITCODE -eq 0 -and $check) {
             if (-not (Test-Path $CONFIG_DIR)) { New-Item -ItemType Directory -Path $CONFIG_DIR -Force | Out-Null }
-            $MOBILE_PAT | Out-File -FilePath $MOBILE_TOKEN_FILE -Encoding ascii -NoNewline
-            Write-Host "[vgc-agent-kit] Mobile token OK."
+            $SCOUT_PAT | Out-File -FilePath $SCOUT_TOKEN_FILE -Encoding ascii -NoNewline
+            Write-Host "[vgc-agent-kit] Scout token OK."
         } else {
-            Write-Host "[vgc-agent-kit] WARNING: Mobile token is invalid."
+            Write-Host "[vgc-agent-kit] WARNING: Scout token is invalid."
         }
     } else {
-        Write-Host "[vgc-agent-kit] Skipped mobile token."
+        Write-Host "[vgc-agent-kit] Skipped scout token."
     }
 }
 
@@ -314,10 +314,10 @@ Write-Host "  Repo location:   $VGC_DIR"
 Write-Host "  Workspace:       $WORKSPACE_DIR"
 Write-Host "  Auth:"
 Write-Host "    gh CLI:        authenticated (kit + workspace)"
-if (Test-Path $MOBILE_TOKEN_FILE) {
-    Write-Host "    Mobile token:  $MOBILE_TOKEN_FILE"
+if (Test-Path $SCOUT_TOKEN_FILE) {
+    Write-Host "    Scout token:  $SCOUT_TOKEN_FILE"
 } else {
-    Write-Host "    Mobile token:  not configured"
+    Write-Host "    Scout token:  not configured"
 }
 Write-Host "  Manual update:   vgc-agent-kit-update-codex"
 Write-Host ""
