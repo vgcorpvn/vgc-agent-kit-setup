@@ -1,4 +1,7 @@
 $ErrorActionPreference = "Stop"
+if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 
 $VGC_ROOT = "$env:USERPROFILE\.vgc"
 $VGC_DIR = "$VGC_ROOT\agent-kit"
@@ -71,6 +74,187 @@ function Read-SecretText {
     }
 }
 
+function Invoke-NativeQuiet {
+    param([Parameter(Mandatory = $true)][scriptblock]$Command)
+
+    $oldErrorActionPreference = $ErrorActionPreference
+    $nativePreferenceExists = [bool](Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)
+    if ($nativePreferenceExists) {
+        $oldNativePreference = $PSNativeCommandUseErrorActionPreference
+    }
+
+    try {
+        $ErrorActionPreference = "Continue"
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+
+        & $Command *> $null
+        return $LASTEXITCODE
+    } catch {
+        return 1
+    } finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $oldNativePreference
+        }
+    }
+}
+
+function Invoke-NativeOutput {
+    param([Parameter(Mandatory = $true)][scriptblock]$Command)
+
+    $oldErrorActionPreference = $ErrorActionPreference
+    $nativePreferenceExists = [bool](Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)
+    if ($nativePreferenceExists) {
+        $oldNativePreference = $PSNativeCommandUseErrorActionPreference
+    }
+
+    try {
+        $ErrorActionPreference = "Continue"
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+
+        $output = & $Command 2>$null
+        return [pscustomobject]@{
+            ExitCode = $LASTEXITCODE
+            Output = $output
+        }
+    } catch {
+        return [pscustomobject]@{
+            ExitCode = 1
+            Output = $null
+        }
+    } finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $oldNativePreference
+        }
+    }
+}
+
+function Invoke-RequiredNative {
+    param(
+        [Parameter(Mandatory = $true)][string]$Description,
+        [Parameter(Mandatory = $true)][scriptblock]$Command
+    )
+
+    $oldErrorActionPreference = $ErrorActionPreference
+    $nativePreferenceExists = [bool](Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)
+    if ($nativePreferenceExists) {
+        $oldNativePreference = $PSNativeCommandUseErrorActionPreference
+    }
+
+    try {
+        $ErrorActionPreference = "Continue"
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+
+        & $Command
+        $exitCode = $LASTEXITCODE
+    } catch {
+        $exitCode = 1
+    } finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $oldNativePreference
+        }
+    }
+
+    if ($exitCode -ne 0) {
+        Write-Host "[vgc-agent-kit] ERROR: $Description failed (exit code $exitCode)."
+        exit 1
+    }
+}
+
+function Remove-PathSafe {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        if ($item.PSIsContainer) {
+            [System.IO.Directory]::Delete($item.FullName)
+        } else {
+            Remove-Item -LiteralPath $item.FullName -Force
+        }
+        return
+    }
+
+    Remove-Item -LiteralPath $item.FullName -Force -Recurse
+}
+
+function Clear-GhAuthEnvironment {
+    $hadTokenEnv = $false
+    if (Test-Path Env:\GH_TOKEN) {
+        Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+        $hadTokenEnv = $true
+    }
+    if (Test-Path Env:\GITHUB_TOKEN) {
+        Remove-Item Env:\GITHUB_TOKEN -ErrorAction SilentlyContinue
+        $hadTokenEnv = $true
+    }
+    if ($hadTokenEnv) {
+        Write-Host "[vgc-agent-kit] Cleared GH_TOKEN/GITHUB_TOKEN for gh CLI login in this session."
+    }
+}
+
+function Invoke-GhLoginWithToken {
+    param([Parameter(Mandatory = $true)][string]$Token)
+
+    Clear-GhAuthEnvironment
+    $logoutExitCode = Invoke-NativeQuiet { gh auth logout -h github.com -y }
+    if ($logoutExitCode -ne 0) {
+        Write-Host "[vgc-agent-kit] gh auth logout skipped or failed; continuing with fresh token login."
+    }
+
+    $tokenFile = [System.IO.Path]::GetTempFileName()
+    $oldErrorActionPreference = $ErrorActionPreference
+    $nativePreferenceExists = [bool](Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)
+    if ($nativePreferenceExists) {
+        $oldNativePreference = $PSNativeCommandUseErrorActionPreference
+    }
+
+    try {
+        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText($tokenFile, ($Token.Trim() + [Environment]::NewLine), $utf8NoBom)
+
+        $ErrorActionPreference = "Continue"
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+
+        $loginCommand = "gh auth login -h github.com --with-token < `"$tokenFile`""
+        & cmd.exe /d /c $loginCommand *> $null
+        $loginExitCode = $LASTEXITCODE
+    } catch {
+        $loginExitCode = 1
+    } finally {
+        Remove-Item $tokenFile -Force -ErrorAction SilentlyContinue
+        $ErrorActionPreference = $oldErrorActionPreference
+        if ($nativePreferenceExists) {
+            $PSNativeCommandUseErrorActionPreference = $oldNativePreference
+        }
+    }
+
+    if ($loginExitCode -ne 0) {
+        return $false
+    }
+
+    if ((Invoke-NativeQuiet { gh auth status -h github.com }) -ne 0) {
+        return $false
+    }
+
+    if ((Invoke-NativeQuiet { gh auth token -h github.com }) -ne 0) {
+        return $false
+    }
+
+    return $true
+}
+
 Write-Host "======================================"
 Write-Host "  VGC Agent Kit - Setup (Claude Code)"
 Write-Host "======================================"
@@ -103,6 +287,8 @@ Write-Host "[vgc-agent-kit] Claude Code OK."
 # ──────────────────────────────────────────
 # Step 3: Check/install gh CLI
 # ──────────────────────────────────────────
+$ghInstalled = $false
+
 if (-not (Test-CommandAvailable "gh")) {
     Write-Host "[vgc-agent-kit] GitHub CLI (gh) not found. Installing..."
     if (-not (Install-WingetPackage -PackageId "GitHub.cli" -Label "GitHub CLI (gh)" -CommandName "gh" -ManualUrl "https://cli.github.com/")) {
@@ -120,16 +306,14 @@ $ghInstalled = $true
 $NEED_MAIN_TOKEN = $true
 
 if ($ghInstalled) {
-    & gh auth status -h github.com 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    Clear-GhAuthEnvironment
+    if ((Invoke-NativeQuiet { gh auth status -h github.com }) -eq 0) {
         Write-Host ""
         Write-Host "[vgc-agent-kit] gh CLI already authenticated."
 
         $reposOk = $true
-        & gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) { $reposOk = $false }
-        & gh api repos/vgcorpvn/vgc-agent-workspace --jq '.name' 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) { $reposOk = $false }
+        if ((Invoke-NativeQuiet { gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' }) -ne 0) { $reposOk = $false }
+        if ((Invoke-NativeQuiet { gh api repos/vgcorpvn/vgc-agent-workspace --jq '.name' }) -ne 0) { $reposOk = $false }
 
         if ($reposOk) {
             Write-Host "[vgc-agent-kit] Token access OK — reusing."
@@ -167,10 +351,9 @@ if ($NEED_MAIN_TOKEN) {
 
     if ($ghInstalled) {
         Write-Host "[vgc-agent-kit] Authenticating gh CLI..."
-        & gh auth logout -h github.com -y 2>$null | Out-Null
-        $MAIN_TOKEN | & gh auth login -h github.com --with-token 2>$null
-        if ($LASTEXITCODE -ne 0) {
+        if (-not (Invoke-GhLoginWithToken $MAIN_TOKEN)) {
             Write-Host "[vgc-agent-kit] ERROR: gh auth login failed. Token may be invalid, expired, or missing required scopes."
+            Write-Host "[vgc-agent-kit] The setup script could not make 'gh auth status' pass after login."
             exit 1
         }
         Write-Host "[vgc-agent-kit] gh auth OK."
@@ -182,7 +365,7 @@ if ($NEED_MAIN_TOKEN) {
 # ──────────────────────────────────────────
 if ($ghInstalled) {
     Write-Host "[vgc-agent-kit] Syncing credentials: gh -> git..."
-    & gh auth setup-git -h github.com 2>$null
+    Invoke-NativeQuiet { gh auth setup-git -h github.com } | Out-Null
     Write-Host "[vgc-agent-kit] git credential helper = gh CLI."
 }
 
@@ -194,10 +377,10 @@ Write-Host "[vgc-agent-kit] Verifying repo access..."
 
 $verifyOk = $true
 if ($ghInstalled) {
-    $r1 = & gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' 2>$null
-    if ($LASTEXITCODE -eq 0 -and $r1) { Write-Host "  OK Agent Kit" } else { Write-Host "  FAIL Agent Kit"; $verifyOk = $false }
-    $r2 = & gh api repos/vgcorpvn/vgc-agent-workspace --jq '.name' 2>$null
-    if ($LASTEXITCODE -eq 0 -and $r2) { Write-Host "  OK Workspace" } else { Write-Host "  FAIL Workspace"; $verifyOk = $false }
+    $r1 = Invoke-NativeOutput { gh api repos/vgcorpvn/vgc-agent-kit --jq '.name' }
+    if ($r1.ExitCode -eq 0 -and $r1.Output) { Write-Host "  OK Agent Kit" } else { Write-Host "  FAIL Agent Kit"; $verifyOk = $false }
+    $r2 = Invoke-NativeOutput { gh api repos/vgcorpvn/vgc-agent-workspace --jq '.name' }
+    if ($r2.ExitCode -eq 0 -and $r2.Output) { Write-Host "  OK Workspace" } else { Write-Host "  FAIL Workspace"; $verifyOk = $false }
 }
 
 if (-not $verifyOk) {
@@ -214,16 +397,16 @@ $REPO_URL = "https://github.com/vgcorpvn/vgc-agent-kit.git"
 
 if (Test-Path "$VGC_DIR\.git") {
     Write-Host "[vgc-agent-kit] Repo already exists — pulling latest..."
-    & git -C $VGC_DIR checkout main 2>$null
-    & git -C $VGC_DIR pull --ff-only origin main 2>$null
+    Invoke-RequiredNative "Checkout agent-kit main" { git -C $VGC_DIR checkout main }
+    Invoke-RequiredNative "Pull agent-kit main" { git -C $VGC_DIR pull --ff-only origin main }
 } elseif (Test-Path $VGC_DIR) {
     $overwrite = Read-Host "Directory $VGC_DIR exists but is not a git repo. Overwrite? (y/N)"
     if ($overwrite -ne "y" -and $overwrite -ne "Y") { exit 0 }
-    Remove-Item -Recurse -Force $VGC_DIR
-    & git clone --quiet $REPO_URL $VGC_DIR
+    Remove-PathSafe $VGC_DIR
+    Invoke-RequiredNative "Clone agent-kit" { git clone --quiet $REPO_URL $VGC_DIR }
     Write-Host "[vgc-agent-kit] Cloned successfully."
 } else {
-    & git clone --quiet $REPO_URL $VGC_DIR
+    Invoke-RequiredNative "Clone agent-kit" { git clone --quiet $REPO_URL $VGC_DIR }
     Write-Host "[vgc-agent-kit] Cloned successfully."
 }
 
@@ -234,18 +417,18 @@ $WORKSPACE_URL = "https://github.com/vgcorpvn/vgc-agent-workspace.git"
 
 if (Test-Path "$WORKSPACE_DIR\.git") {
     Write-Host "[vgc-agent-kit] Workspace already exists — pulling latest..."
-    & git -C $WORKSPACE_DIR pull --ff-only 2>$null
+    Invoke-RequiredNative "Pull workspace" { git -C $WORKSPACE_DIR pull --ff-only }
 } elseif (Test-Path $WORKSPACE_DIR) {
     $overwriteWs = Read-Host "Workspace exists but is not a git repo. Overwrite? (y/N)"
     if ($overwriteWs -ne "y" -and $overwriteWs -ne "Y") {
         Write-Host "[vgc-agent-kit] Skipping workspace setup."
     } else {
-        Remove-Item -Recurse -Force $WORKSPACE_DIR
-        & git clone --quiet $WORKSPACE_URL $WORKSPACE_DIR
+        Remove-PathSafe $WORKSPACE_DIR
+        Invoke-RequiredNative "Clone workspace" { git clone --quiet $WORKSPACE_URL $WORKSPACE_DIR }
         Write-Host "[vgc-agent-kit] Workspace cloned successfully."
     }
 } else {
-    & git clone --quiet $WORKSPACE_URL $WORKSPACE_DIR
+    Invoke-RequiredNative "Clone workspace" { git clone --quiet $WORKSPACE_URL $WORKSPACE_DIR }
     Write-Host "[vgc-agent-kit] Workspace cloned successfully."
 }
 
@@ -255,8 +438,8 @@ if (Test-Path "$WORKSPACE_DIR\.git") {
 $skipScout = $false
 
 if ($ghInstalled) {
-    $scoutCheck = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
-    if ($LASTEXITCODE -eq 0 -and $scoutCheck) {
+    $scoutCheck = Invoke-NativeOutput { gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' }
+    if ($scoutCheck.ExitCode -eq 0 -and $scoutCheck.Output) {
         Write-Host "[vgc-agent-kit] Token already has source repo access — no separate token needed."
         if (-not (Test-Path $CONFIG_DIR)) { New-Item -ItemType Directory -Path $CONFIG_DIR -Force | Out-Null }
         & gh auth token -h github.com 2>$null | Out-File -FilePath $SCOUT_TOKEN_FILE -Encoding ascii -NoNewline
@@ -267,10 +450,13 @@ if ($ghInstalled) {
 if (-not $skipScout -and (Test-Path $SCOUT_TOKEN_FILE)) {
     $existing = Get-Content $SCOUT_TOKEN_FILE -Raw -ErrorAction SilentlyContinue
     if ($existing) {
-        $env:GH_TOKEN = $existing.Trim()
-        $check = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
-        Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
-        if ($LASTEXITCODE -eq 0 -and $check) {
+        try {
+            $env:GH_TOKEN = $existing.Trim()
+            $check = Invoke-NativeOutput { gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' }
+        } finally {
+            Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+        }
+        if ($check.ExitCode -eq 0 -and $check.Output) {
             Write-Host "[vgc-agent-kit] Existing scout token is valid — reusing."
             $skipScout = $true
         }
@@ -290,11 +476,14 @@ if (-not $skipScout) {
     $SCOUT_PAT = Read-SecretText "Enter scout token (Enter to skip)"
 
     if (-not [string]::IsNullOrWhiteSpace($SCOUT_PAT)) {
-        $env:GH_TOKEN = $SCOUT_PAT
-        $check = & gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' 2>$null
-        Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+        try {
+            $env:GH_TOKEN = $SCOUT_PAT
+            $check = Invoke-NativeOutput { gh api repos/vgcorpvn/mobile.vhandicap.com --jq '.name' }
+        } finally {
+            Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+        }
 
-        if ($LASTEXITCODE -eq 0 -and $check) {
+        if ($check.ExitCode -eq 0 -and $check.Output) {
             if (-not (Test-Path $CONFIG_DIR)) { New-Item -ItemType Directory -Path $CONFIG_DIR -Force | Out-Null }
             $SCOUT_PAT | Out-File -FilePath $SCOUT_TOKEN_FILE -Encoding ascii -NoNewline
             Write-Host "[vgc-agent-kit] Scout token OK."
@@ -321,7 +510,7 @@ Get-ChildItem -Path $CLAUDE_SKILLS_DIR -Directory -Filter "vgc-agent-kit-*" -Err
 } | ForEach-Object {
     $target = (Get-Item $_.FullName).Target
     if ($target -like "$VGC_DIR\skills\*" -and -not (Test-Path $target)) {
-        Remove-Item $_.FullName -Force
+        Remove-PathSafe $_.FullName
         Write-Host "[vgc-agent-kit] Removed stale skill: $($_.Name)"
     }
 }
@@ -332,7 +521,7 @@ Get-ChildItem -Path "$VGC_DIR\skills" -Directory | ForEach-Object {
     $linkPath = Join-Path $CLAUDE_SKILLS_DIR $skillName
 
     if (-not (Test-Path "$skillPath\SKILL.md")) { return }
-    if (Test-Path $linkPath) { Remove-Item $linkPath -Force -Recurse }
+    if (Test-Path $linkPath) { Remove-PathSafe $linkPath }
 
     try {
         New-Item -ItemType Junction -Path $linkPath -Target $skillPath -Force | Out-Null
