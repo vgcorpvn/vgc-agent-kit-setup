@@ -11,6 +11,66 @@ $env:GIT_TERMINAL_PROMPT = "0"
 
 if (-not (Test-Path $VGC_ROOT)) { New-Item -ItemType Directory -Path $VGC_ROOT -Force | Out-Null }
 
+function Refresh-ProcessPath {
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $extraPaths = @(
+        "$env:ProgramFiles\Git\cmd",
+        "$env:ProgramFiles\Git\bin",
+        "${env:ProgramFiles(x86)}\Git\cmd",
+        "$env:ProgramFiles\GitHub CLI",
+        "$env:LOCALAPPDATA\Programs\Git\cmd",
+        "$env:LOCALAPPDATA\Programs\GitHub CLI"
+    ) | Where-Object { $_ -and (Test-Path $_) }
+
+    $env:Path = (@($machinePath, $userPath) + $extraPaths) -join ";"
+}
+
+function Test-CommandAvailable {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    Refresh-ProcessPath
+    return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Install-WingetPackage {
+    param(
+        [Parameter(Mandatory = $true)][string]$PackageId,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$CommandName,
+        [Parameter(Mandatory = $true)][string]$ManualUrl
+    )
+
+    if (-not (Test-CommandAvailable "winget")) {
+        Write-Host "[vgc-agent-kit] ERROR: winget is not available. Install $Label manually: $ManualUrl"
+        return $false
+    }
+
+    Write-Host "[vgc-agent-kit] Installing $Label via winget..."
+    & winget install --id $PackageId -e --accept-package-agreements --accept-source-agreements
+    Refresh-ProcessPath
+
+    if (Test-CommandAvailable $CommandName) {
+        Write-Host "[vgc-agent-kit] $Label installed successfully."
+        return $true
+    }
+
+    Write-Host "[vgc-agent-kit] ERROR: $Label install finished, but '$CommandName' is still not available in this shell."
+    Write-Host "[vgc-agent-kit] Close and reopen PowerShell, then re-run this script. Manual install: $ManualUrl"
+    return $false
+}
+
+function Read-SecretText {
+    param([Parameter(Mandatory = $true)][string]$Prompt)
+
+    $secureValue = Read-Host $Prompt -AsSecureString
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureValue)
+    try {
+        return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+}
+
 Write-Host "======================================"
 Write-Host "  VGC Agent Kit - Setup (Claude Code)"
 Write-Host "======================================"
@@ -19,15 +79,15 @@ Write-Host ""
 # ──────────────────────────────────────────
 # Step 1: Check git
 # ──────────────────────────────────────────
-try {
-    $gitVersion = & git --version 2>$null
-    if (-not $gitVersion) { throw "not found" }
-    Write-Host "[vgc-agent-kit] Git OK: $gitVersion"
-} catch {
+if (-not (Test-CommandAvailable "git")) {
     Write-Host "[vgc-agent-kit] Git is not installed."
-    Write-Host "  https://git-scm.com/download/win"
-    exit 1
+    if (-not (Install-WingetPackage -PackageId "Git.Git" -Label "Git" -CommandName "git" -ManualUrl "https://git-scm.com/download/win")) {
+        exit 1
+    }
 }
+
+$gitVersion = & git --version
+Write-Host "[vgc-agent-kit] Git OK: $gitVersion"
 
 # ──────────────────────────────────────────
 # Step 2: Check Claude Code installed
@@ -43,26 +103,16 @@ Write-Host "[vgc-agent-kit] Claude Code OK."
 # ──────────────────────────────────────────
 # Step 3: Check/install gh CLI
 # ──────────────────────────────────────────
-$ghInstalled = $false
-try {
-    $ghVersion = & gh --version 2>$null | Select-Object -First 1
-    if ($ghVersion) {
-        Write-Host "[vgc-agent-kit] gh CLI OK: $ghVersion"
-        $ghInstalled = $true
-    }
-} catch {}
-
-if (-not $ghInstalled) {
+if (-not (Test-CommandAvailable "gh")) {
     Write-Host "[vgc-agent-kit] GitHub CLI (gh) not found. Installing..."
-    try {
-        & winget install GitHub.cli --accept-package-agreements --accept-source-agreements 2>$null
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-        $ghInstalled = $true
-        Write-Host "[vgc-agent-kit] gh CLI installed successfully."
-    } catch {
-        Write-Host "[vgc-agent-kit] WARNING: Failed to install gh. Install manually: https://cli.github.com/"
+    if (-not (Install-WingetPackage -PackageId "GitHub.cli" -Label "GitHub CLI (gh)" -CommandName "gh" -ManualUrl "https://cli.github.com/")) {
+        exit 1
     }
 }
+
+$ghVersion = & gh --version | Select-Object -First 1
+Write-Host "[vgc-agent-kit] gh CLI OK: $ghVersion"
+$ghInstalled = $true
 
 # ──────────────────────────────────────────
 # Step 4: Authenticate gh CLI — kit + workspace (read+write)
@@ -104,21 +154,23 @@ if ($NEED_MAIN_TOKEN) {
     Write-Host "+---------------------------------------------------------+"
     Write-Host ""
 
-    $secureToken = Read-Host "Enter main token (GitHub PAT)" -AsSecureString
-    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-    $MAIN_TOKEN = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+    $MAIN_TOKEN = Read-SecretText "Enter main token (GitHub PAT)"
 
     if ([string]::IsNullOrWhiteSpace($MAIN_TOKEN)) {
         Write-Host "[vgc-agent-kit] ERROR: Token cannot be empty."
         exit 1
     }
 
+    if ($MAIN_TOKEN -notmatch "^(ghp_|github_pat_)") {
+        Write-Host "[vgc-agent-kit] WARNING: Token does not start with ghp_ or github_pat_."
+    }
+
     if ($ghInstalled) {
         Write-Host "[vgc-agent-kit] Authenticating gh CLI..."
+        & gh auth logout -h github.com -y 2>$null | Out-Null
         $MAIN_TOKEN | & gh auth login -h github.com --with-token 2>$null
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "[vgc-agent-kit] ERROR: gh auth login failed."
+            Write-Host "[vgc-agent-kit] ERROR: gh auth login failed. Token may be invalid, expired, or missing required scopes."
             exit 1
         }
         Write-Host "[vgc-agent-kit] gh auth OK."
@@ -235,10 +287,7 @@ if (-not $skipScout) {
     Write-Host "+---------------------------------------------------------+"
     Write-Host ""
 
-    $secureTokenB = Read-Host "Enter scout token (Enter to skip)" -AsSecureString
-    $BSTR_B = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureTokenB)
-    $SCOUT_PAT = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR_B)
-    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR_B)
+    $SCOUT_PAT = Read-SecretText "Enter scout token (Enter to skip)"
 
     if (-not [string]::IsNullOrWhiteSpace($SCOUT_PAT)) {
         $env:GH_TOKEN = $SCOUT_PAT

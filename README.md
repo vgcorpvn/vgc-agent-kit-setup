@@ -55,7 +55,9 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 
 ## Setup làm gì
 
-1. Kiểm tra git + gh CLI (tự cài gh nếu chưa có)
+1. Kiểm tra git + gh CLI
+   - Windows: tự cài Git và GitHub CLI bằng `winget` nếu thiếu
+   - macOS: mở Xcode Command Line Tools nếu thiếu Git, tự cài `gh` qua Homebrew nếu có
 2. **GitHub PAT** → `gh auth login` → verify quyền truy cập kit + workspace
 3. **`gh auth setup-git`** → đồng bộ credentials giữa git và gh (URL sạch, không nhúng token)
 4. Clone `vgc-agent-kit` → `~/.vgc/agent-kit/`
@@ -79,6 +81,7 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 | Vấn đề | Giải pháp |
 |--------|-----------|
 | "Git chưa được cài đặt" | Mac: cài Xcode Command Line Tools. Windows: tải Git for Windows |
+| Windows không tự cài được Git/gh | Kiểm tra máy có `winget`. Nếu không có, cài thủ công Git for Windows và GitHub CLI rồi chạy lại setup |
 | "gh auth login thất bại" | GitHub PAT không hợp lệ hoặc hết hạn. Tạo token mới |
 | "GitHub PAT không đủ quyền" | Kiểm tra token có scope `repo` và account đã vào org `vgcorpvn` |
 | `gh api` báo 401 nhưng `git pull` OK | Chạy lại setup — sẽ re-auth gh CLI và chạy `gh auth setup-git` |
