@@ -65,13 +65,59 @@ function Install-WingetPackage {
 function Read-SecretText {
     param([Parameter(Mandatory = $true)][string]$Prompt)
 
-    $secureValue = Read-Host $Prompt -AsSecureString
-    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureValue)
-    try {
-        return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-    } finally {
-        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    Write-Host -NoNewline "$Prompt`: "
+
+    $chars = [System.Collections.Generic.List[char]]::new()
+
+    while ($true) {
+        $key = [Console]::ReadKey($true)
+
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            Write-Host ""
+            break
+        }
+
+        if ($key.Key -eq [ConsoleKey]::Backspace) {
+            if ($chars.Count -gt 0) {
+                $chars.RemoveAt($chars.Count - 1)
+                Write-Host -NoNewline "`b `b"
+            }
+            continue
+        }
+
+        if ($key.Key -eq [ConsoleKey]::V -and ($key.Modifiers -band [ConsoleModifiers]::Control)) {
+            $clip = ""
+            try {
+                Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+                $clip = [System.Windows.Forms.Clipboard]::GetText()
+            } catch {
+                try {
+                    $clip = Get-Clipboard -Raw -ErrorAction Stop
+                } catch {
+                    try {
+                        $clip = (Get-Clipboard -ErrorAction Stop) -join [Environment]::NewLine
+                    } catch {
+                        $clip = ""
+                    }
+                }
+            }
+
+            foreach ($c in ([string]$clip).ToCharArray()) {
+                if ($c -ne "`r" -and $c -ne "`n") {
+                    $chars.Add($c)
+                    Write-Host -NoNewline "*"
+                }
+            }
+            continue
+        }
+
+        if ($key.KeyChar -ne [char]0 -and $key.KeyChar -ne "`r" -and $key.KeyChar -ne "`n") {
+            $chars.Add($key.KeyChar)
+            Write-Host -NoNewline "*"
+        }
     }
+
+    return -join $chars
 }
 
 function Invoke-NativeQuiet {
@@ -337,6 +383,7 @@ if ($NEED_MAIN_TOKEN) {
     Write-Host "|  Create at: https://github.com/settings/tokens          |"
     Write-Host "+---------------------------------------------------------+"
     Write-Host ""
+    Write-Host "[vgc-agent-kit] Tip: paste with Ctrl+V or Right-click. Input is hidden and shown as *."
 
     $MAIN_TOKEN = Read-SecretText "Enter main token (GitHub PAT)"
 
@@ -472,6 +519,7 @@ if (-not $skipScout) {
     Write-Host "|  Press Enter to skip if not needed                      |"
     Write-Host "+---------------------------------------------------------+"
     Write-Host ""
+    Write-Host "[vgc-agent-kit] Tip: paste with Ctrl+V or Right-click. Input is hidden and shown as *."
 
     $SCOUT_PAT = Read-SecretText "Enter scout token (Enter to skip)"
 
