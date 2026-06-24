@@ -7,6 +7,7 @@ $VGC_ROOT = "$env:USERPROFILE\.vgc"
 $VGC_DIR = "$VGC_ROOT\agent-kit"
 $CLAUDE_SKILLS_DIR = "$env:USERPROFILE\.claude\skills"
 $WORKSPACE_DIR = "$VGC_ROOT\agent-workspace"
+$TREES_DIR = "$VGC_ROOT\agent-workspace-trees"
 $CONFIG_DIR = "$VGC_ROOT\config"
 $SCOUT_TOKEN_FILE = "$CONFIG_DIR\scout-token"
 
@@ -477,6 +478,12 @@ if (Test-Path "$WORKSPACE_DIR\.git") {
 } else {
     Invoke-RequiredNative "Clone workspace" { git clone --quiet $WORKSPACE_URL $WORKSPACE_DIR }
     Write-Host "[vgc-agent-kit] Workspace cloned successfully."
+}
+
+# Create worktrees directory (for parallel multi-feature work)
+if (-not (Test-Path $TREES_DIR)) {
+    New-Item -ItemType Directory -Path $TREES_DIR -Force | Out-Null
+    Write-Host "[vgc-agent-kit] Created worktrees directory: $TREES_DIR"
 }
 
 # ──────────────────────────────────────────

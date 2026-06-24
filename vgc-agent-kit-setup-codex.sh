@@ -6,6 +6,7 @@ VGC_ROOT="$HOME/.vgc"
 VGC_DIR="$VGC_ROOT/agent-kit"
 SKILLS_DIR="$HOME/.agents/skills"
 WORKSPACE_DIR="$VGC_ROOT/agent-workspace"
+TREES_DIR="$VGC_ROOT/agent-workspace-trees"
 CONFIG_DIR="$VGC_ROOT/config"
 SCOUT_TOKEN_FILE="$CONFIG_DIR/scout-token"
 
@@ -218,6 +219,10 @@ else
     git clone --quiet "$WORKSPACE_URL" "$WORKSPACE_DIR"
     echo "[vgc-agent-kit] Workspace cloned successfully."
 fi
+
+# Create worktrees directory (for parallel multi-feature work)
+mkdir -p "$TREES_DIR"
+echo "[vgc-agent-kit] Worktrees directory ready: $TREES_DIR"
 
 # ──────────────────────────────────────────
 # Step 8: Scout token (optional) — source repos (read-only)
