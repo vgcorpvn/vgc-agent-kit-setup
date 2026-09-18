@@ -596,9 +596,24 @@ if (-not (Test-Path $profilePath)) {
     New-Item -ItemType File -Path $profilePath -Force | Out-Null
 }
 
-$aliasLine = "function vgc-agent-kit-update-claude { & git -C `"$VGC_DIR`" pull --ff-only }"
+$aliasLine = "function vgc-agent-kit-update-claude { & `"$VGC_DIR\scripts\vgc-agent-kit-update-claude.ps1`" }"
 
-if (-not (Select-String -Path $profilePath -Pattern "vgc-agent-kit-update-claude" -Quiet -ErrorAction SilentlyContinue)) {
+# Ensure the correct alias/function is in the PowerShell profile.
+# - Matches the EXACT line so a previously-written wrong value gets replaced.
+# - Replaces stale function in-place; only appends the section header when adding.
+$existing = Select-String -Path $profilePath -Pattern "function vgc-agent-kit-update-claude" -ErrorAction SilentlyContinue
+if ($existing) {
+    if ($existing.Line -eq $aliasLine) {
+        Write-Host "[vgc-agent-kit] Alias already correct in PowerShell profile"
+    } else {
+        $lines = Get-Content $profilePath | Where-Object { $_ -notmatch "function vgc-agent-kit-update-claude" }
+        Set-Content -Path $profilePath -Value $lines
+        Add-Content -Path $profilePath -Value ""
+        Add-Content -Path $profilePath -Value "# VGC Agent Kit (Claude Code)"
+        Add-Content -Path $profilePath -Value $aliasLine
+        Write-Host "[vgc-agent-kit] Alias updated in PowerShell profile"
+    }
+} else {
     Add-Content -Path $profilePath -Value ""
     Add-Content -Path $profilePath -Value "# VGC Agent Kit (Claude Code)"
     Add-Content -Path $profilePath -Value $aliasLine

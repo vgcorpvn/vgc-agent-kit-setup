@@ -307,7 +307,21 @@ fi
 
 ALIAS_LINE="alias vgc-agent-kit-update-codex=\"$VGC_DIR/scripts/vgc-agent-kit-update-codex.sh\""
 
-if ! grep -q "vgc-agent-kit-update-codex" "$SHELL_RC" 2>/dev/null; then
+# Ensure the correct alias is in $SHELL_RC.
+# - Matches the EXACT line so a previously-written wrong value gets replaced.
+# - Replaces stale alias in-place; only appends the section header when adding.
+if grep -qF "$ALIAS_LINE" "$SHELL_RC" 2>/dev/null; then
+    echo "[vgc-agent-kit] Alias already correct in $SHELL_RC"
+elif grep -q "alias vgc-agent-kit-update-codex" "$SHELL_RC" 2>/dev/null; then
+    sed -i.bak "/alias vgc-agent-kit-update-codex/d; /# VGC Agent Kit$/d" "$SHELL_RC"
+    rm -f "$SHELL_RC.bak"
+    {
+        echo ""
+        echo "# VGC Agent Kit"
+        echo "$ALIAS_LINE"
+    } >> "$SHELL_RC"
+    echo "[vgc-agent-kit] Alias updated in $SHELL_RC"
+else
     {
         echo ""
         echo "# VGC Agent Kit"
